@@ -1,0 +1,73 @@
+## Directorios generados por la compilación
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+## Paquetes NuGet
+# Ignorar el directorio 'packages' en proyectos más antiguos
+packages/
+# Ignorar los archivos generados por NuGet en la carpeta raíz
+*.nupkg
+# Ignorar la caché de NuGet
+.nuget/
+# Ignorar librerias de terceros
+vendor/
+lib/
+bootstrap/
+
+## Archivos de usuario y configuración del IDE
+*.user
+*.suo
+*.sln.docstates
+*.userosscache
+*.vssscc
+*.vspscc
+*.vshost.*
+*.tscache
+.vs/
+
+## Archivos de registro y caché
+*.log
+*.ncb
+*.bak
+*.cache
+*.sdf
+*.opensdf
+*.intellisense.xml
+
+## Archivos de datos y bases de datos
+*.dbmdl
+*.mdf
+*.ldf
+*.publish.xml
+
+## Archivos de Azure y otros complementos
+csx/
+*.build.csdef
+# JetBrains Rider
+.idea/
+# Visual Studio Code
+.vscode/
+
+## Opciones y archivos de despliegue
+_ReSharper.*/
+*.resharper
+[Pp]ublish/
+*.publishproj
+
+## Archivos de artefactos
+*.trx
+*.test.dll
+*.test.pdb
+
+# Ignorar archivos temporales
+*.tmp
+*~
+
+# Directorios de pruebas de UI
+TestResults/
