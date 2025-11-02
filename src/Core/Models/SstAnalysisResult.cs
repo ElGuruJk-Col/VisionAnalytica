@@ -1,34 +1,39 @@
-﻿namespace VisioAnalytica.Core.Models
+﻿using System.Collections.Generic;
+using System.Text.Json.Serialization;
+
+namespace VisioAnalytica.Core.Models
 {
     /// <summary>
-    /// Modelo de datos estándar (DTO) para la respuesta
-    /// del análisis de IA.
-    /// Definido en Core para ser usado por todos los proyectos.
+    /// Define la estructura de un único hallazgo de SST (v2.0)
+    /// Este modelo ahora distingue entre acciones correctivas y preventivas,
+    /// de acuerdo con los estándares profesionales de SST.
     /// </summary>
-    public class SstAnalysisResult
+    public record HallazgoItem
+    (
+        [property: JsonPropertyName("Descripcion")]
+        string Descripcion,
+
+        [property: JsonPropertyName("NivelRiesgo")]
+        string NivelRiesgo,
+
+        // ¡CAMBIO CLAVE! Reemplazamos "SolucionPropuesta" por dos campos
+
+        [property: JsonPropertyName("AccionCorrectiva")]
+        string AccionCorrectiva, // La solución inmediata
+
+        [property: JsonPropertyName("AccionPreventiva")]
+        string AccionPreventiva  // La solución a largo plazo (la "causa raíz")
+    );
+
+    /// <summary>
+    /// El objeto raíz del resultado del análisis de SST.
+    /// </summary>
+    public record SstAnalysisResult
     {
         /// <summary>
-        /// El riesgo o hallazgo específico identificado por la IA.
-        /// (Ej: "Cableado expuesto en zona de paso")
+        /// La lista de hallazgos identificados por la IA.
         /// </summary>
-        public string Hallazgo { get; set; } = null!;
-
-        /// <summary>
-        /// La acción correctiva o solución propuesta por la IA.
-        /// (Ej: "Canalizar inmediatamente y señalizar")
-        /// </summary>
-        public string SolucionPropuesta { get; set; } = null!;
-
-        /// <summary>
-        /// El nivel de riesgo (Alto, Medio, Bajo)
-        /// </summary>
-        public string NivelRiesgo { get; set; } = null!;
-
-        /// <summary>
-        /// (Opcional, para v2) La referencia legal o normativa
-        /// que se está incumpliendo.
-        /// </summary>
-        public string? ReferenciaLegal { get; set; }
+        [JsonPropertyName("Hallazgos")]
+        public List<HallazgoItem> Hallazgos { get; init; } = [];
     }
 }
-
