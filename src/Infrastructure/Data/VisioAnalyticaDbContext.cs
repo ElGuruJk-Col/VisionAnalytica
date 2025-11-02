@@ -1,5 +1,4 @@
-﻿
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -11,20 +10,15 @@ namespace VisioAnalytica.Infrastructure.Data
     /// Este es el "cerebro" de Entity Framework Core, heredando de IdentityDbContext
     /// para integrar las tablas de autenticación de ASP.NET Core Identity.
     /// </summary>
-    public class VisioAnalyticaDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
+    public class VisioAnalyticaDbContext(DbContextOptions<VisioAnalyticaDbContext> options) : IdentityDbContext<User, IdentityRole<Guid>, Guid>(options)
     {
         // Tablas base de la arquitectura.
-        public DbSet<Organization> Organizations { get; set; }
+        // FIX PARA MOQ: Usamos 'virtual' para permitir que Moq pueda simular esta propiedad.
+        public virtual DbSet<Organization> Organizations { get; set; } // << ¡CORRECCIÓN CLAVE!
 
         // --- ¡NUEVOS DBSETS PARA PERSISTENCIA DE ANÁLISIS (Capítulo 3)! ---
         public DbSet<Inspection> Inspections { get; set; }
         public DbSet<Finding> Findings { get; set; }
-        // ------------------------------------------------------------------
-
-        public VisioAnalyticaDbContext(DbContextOptions<VisioAnalyticaDbContext> options)
-            : base(options)
-        {
-        }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -75,9 +69,6 @@ namespace VisioAnalytica.Infrastructure.Data
                       // ¡CRÍTICO! Si se borra la Inspección, se borran sus detalles (Cascade).
                       .OnDelete(DeleteBehavior.Cascade);
             });
-
-            // Nota: No se requiere un bloque explícito para Finding, su relación N:1
-            // se define desde el lado de Inspection (su padre).
         }
     }
 }

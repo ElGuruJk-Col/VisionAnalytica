@@ -35,7 +35,9 @@ namespace VisioAnalytica.Infrastructure.Services
             var keyString = _config["Jwt:Key"];
             if (string.IsNullOrEmpty(keyString))
             {
-                throw new ArgumentNullException("Jwt:Key no está configurada en appsettings.json");
+                // FIX CA2208: Usamos la forma más simple de ArgumentNullException,
+                // que es la más aceptada, ya que la dependencia proviene de 'config'.
+                throw new ArgumentNullException(nameof(config), "La clave 'Jwt:Key' no está configurada en appsettings.json o es nula/vacía.");
             }
 
             // 2. Convertimos la clave (string) en un objeto de seguridad (bytes)
@@ -49,31 +51,27 @@ namespace VisioAnalytica.Infrastructure.Services
         public string CreateToken(User user)
         {
             // 1. Definir los "Claims" (Datos dentro del Token)
-            // Estos son los "hechos" que el token afirma sobre el usuario.
             var claims = new List<Claim>
             {
                 // Claim estándar para el "nombre de usuario" (único)
-                new Claim(JwtRegisteredClaimNames.NameId, user.UserName!),
+                new(JwtRegisteredClaimNames.NameId, user.UserName!),
                 
                 // Claim estándar para el "email"
-                new Claim(JwtRegisteredClaimNames.Email, user.Email!),
+                new(JwtRegisteredClaimNames.Email, user.Email!),
                 
                 // --- Claims Personalizados (¡Nuestra lógica de negocio!) ---
                 
                 // Guardamos el ID del usuario (Guid)
-                new Claim("uid", user.Id.ToString()),
+                new("uid", user.Id.ToString()),
                 
                 // ¡VITAL! Guardamos el ID de la organización (Multi-Tenant)
-                new Claim("org_id", user.OrganizationId.ToString())
+                new("org_id", user.OrganizationId.ToString())
             };
 
             // 2. Definir las "Credenciales de Firma"
-            // Le decimos al token: "Fírmate usando nuestra llave secreta (_key)
-            // y usa el algoritmo de seguridad más fuerte (HmacSha512)".
             var creds = new SigningCredentials(_key, SecurityAlgorithms.HmacSha512Signature);
 
             // 3. Crear el "Descriptor" del Token (El "Molde")
-            // Aquí juntamos todas las piezas.
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims), // Los datos del usuario
@@ -84,17 +82,13 @@ namespace VisioAnalytica.Infrastructure.Services
             };
 
             // 4. Crear el "Manejador" (El "Operario")
-            // Esta es la clase que sabe tomar el "molde" y construir el token.
             var tokenHandler = new JwtSecurityTokenHandler();
 
             // 5. Crear el Token (El Producto Final)
             var token = tokenHandler.CreateToken(tokenDescriptor);
 
             // 6. Escribir el Token (La "Impresión")
-            // Convertimos el objeto "token" en el string final que
-            // enviaremos al cliente (la app móvil).
             return tokenHandler.WriteToken(token);
         }
     }
 }
-
