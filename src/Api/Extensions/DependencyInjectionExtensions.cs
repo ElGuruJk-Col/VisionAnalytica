@@ -1,5 +1,5 @@
 ﻿// En: src/Api/Extensions/DependencyInjectionExtensions.cs
-// (¡VERSIÓN FINAL Y COMPLETA!)
+// (v4.0 - ¡INYECCIÓN DE PERSISTENCIA COMPLETADA!)
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -9,8 +9,8 @@ using Microsoft.OpenApi.Models;
 using System.Text;
 using VisioAnalytica.Core.Interfaces;
 using VisioAnalytica.Core.Models;
-using VisioAnalytica.Infrastructure.Data;
-using VisioAnalytica.Infrastructure.Services;
+using VisioAnalytica.Infrastructure.Data; // Incluye DbContext y AnalysisRepository
+using VisioAnalytica.Infrastructure.Services; // Incluye TokenService, AuthService, GeminiAnalyzer, AnalysisService
 
 namespace VisioAnalytica.Api.Extensions
 {
@@ -79,9 +79,12 @@ namespace VisioAnalytica.Api.Extensions
             // 4.C: Nuestro Servicio de Auth (de la Tarea 30)
             services.AddScoped<IAuthService, AuthService>();
 
-            // 4.D: ¡NUEVO SERVICIO! (Añadido en el "Capítulo 3")
-            // El "cerebro" orquestador que llama al IAiSstAnalyzer
+            // 4.D: El "cerebro" orquestador que llama al IAiSstAnalyzer
             services.AddScoped<IAnalysisService, AnalysisService>();
+
+            // 4.E: ¡NUEVO REGISTRO! El Repositorio de Persistencia (Capítulo 3)
+            // Conectamos el Contrato (Core) con la Implementación (Infrastructure/Data)
+            services.AddScoped<IAnalysisRepository, AnalysisRepository>(); // << ¡AÑADIDO!
 
 
             // --- 5. SERVICIOS ESTÁNDAR DE API ---
