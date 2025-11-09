@@ -1,13 +1,5 @@
-﻿// En: src/Infrastructure/Services/ReportService.cs
-// (v1.0 - Implementación del Servicio de Reportes)
-
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using VisioAnalytica.Core.Interfaces;
-using VisioAnalytica.Core.Models;
 using VisioAnalytica.Core.Models.Dtos;
 
 namespace VisioAnalytica.Infrastructure.Services

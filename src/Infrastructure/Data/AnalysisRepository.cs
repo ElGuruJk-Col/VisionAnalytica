@@ -1,12 +1,5 @@
-﻿// En: src/Infrastructure/Data/AnalysisRepository.cs
-// (¡NUEVO ARCHIVO: El corazón de la persistencia!)
-
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using VisioAnalytica.Core.Interfaces;
 using VisioAnalytica.Core.Models;
 

@@ -1,9 +1,4 @@
-﻿// En: src/Core/Models/Inspection.cs
-// (¡NUEVO ARCHIVO!)
-
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace VisioAnalytica.Core.Models

@@ -1,7 +1,4 @@
-﻿// En: src/Infrastructure/Services/AuthService.cs
-// (¡VERSIÓN 2.1 - CORREGIDA!)
-//
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 using VisioAnalytica.Core.Interfaces;
 using VisioAnalytica.Core.Models;
 using VisioAnalytica.Core.Models.Dtos;

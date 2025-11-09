@@ -1,12 +1,5 @@
-﻿// En: src/Infrastructure/Services/AnalysisService.cs
-// (v3.0 - ¡IMPLEMENTACIÓN DE PERSISTENCIA!)
-
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic; // Necesario para List/ICollection
-using System.Security.Claims; // Necesario para ClaimTypes (si no se usa User.FindFirstValue)
-using System.Threading.Tasks;
 using VisioAnalytica.Core.Interfaces;
 using VisioAnalytica.Core.Models;
 using VisioAnalytica.Core.Models.Dtos;
@@ -14,47 +7,45 @@ using VisioAnalytica.Core.Models.Dtos;
 namespace VisioAnalytica.Infrastructure.Services
 {
     /// <summary>
-    /// (v3.0 - Actualizado con inyección de IAnalysisRepository)
+    /// Servicio Orquestador de Análisis.
+    /// Su responsabilidad es tomar la solicitud, interactuar con la IA y persistir
+    /// los resultados en la base de datos a través del Repositorio.
     /// </summary>
-    public class AnalysisService : IAnalysisService
+    public class AnalysisService(
+        IAiSstAnalyzer aiAnalyzer,
+        IAnalysisRepository analysisRepository,
+        ILogger<AnalysisService> logger,
+        IConfiguration configuration) : IAnalysisService
     {
-        private readonly IAiSstAnalyzer _aiAnalyzer;
-        private readonly IAnalysisRepository _analysisRepository; // << ¡NUEVO CAMPO!
-        private readonly ILogger<AnalysisService> _logger;
-        private readonly string _masterSstPrompt;
+        private readonly IAiSstAnalyzer _aiAnalyzer = aiAnalyzer;
+        private readonly IAnalysisRepository _analysisRepository = analysisRepository;
+        private readonly ILogger<AnalysisService> _logger = logger;
+        private readonly string _masterSstPrompt = GetMasterSstPrompt(configuration, logger);
 
-        public AnalysisService(
-            IAiSstAnalyzer aiAnalyzer,
-            IAnalysisRepository analysisRepository, // << ¡NUEVA INYECCIÓN!
-            ILogger<AnalysisService> logger,
-            IConfiguration configuration)
+        private static string GetMasterSstPrompt(IConfiguration configuration, ILogger logger)
         {
-            _aiAnalyzer = aiAnalyzer ?? throw new ArgumentNullException(nameof(aiAnalyzer));
-            _analysisRepository = analysisRepository ?? throw new ArgumentNullException(nameof(analysisRepository)); // << ASIGNACIÓN
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
             var promptKey = "AiPrompts:MasterSst";
             var prompt = configuration[promptKey];
 
             if (string.IsNullOrWhiteSpace(prompt))
             {
                 const string errorTemplate = "¡ERROR CRÍTICO! El prompt '{PromptKey}' no se encontró o está vacío en la configuración (appsettings.json).";
-                _logger.LogError(errorTemplate, promptKey);
-                throw new InvalidOperationException($"¡ERROR CRÍTICO! El prompt '{promptKey}' no se encontró...");
+                logger.LogError(errorTemplate, promptKey);
+                throw new InvalidOperationException($"¡ERROR CRÍTICO! El prompt '{promptKey}' no se encontró en la configuración.");
             }
-
-            _masterSstPrompt = prompt;
-            _logger.LogInformation("AnalysisService inicializado y prompt maestro cargado.");
+            return prompt;
         }
+
 
         // --- LÓGICA DE NEGOCIO Y PERSISTENCIA COMBINADA ---
 
-        public async Task<SstAnalysisResult?> PerformSstAnalysisAsync(AnalysisRequestDto request, string userId)
+        // La firma del método ya recibe todos los GUIDs necesarios.
+        public async Task<SstAnalysisResult?> PerformSstAnalysisAsync(AnalysisRequestDto request, string userId, Guid organizationId)
         {
-            _logger.LogInformation("Iniciando PerformSstAnalysisAsync para el usuario {UserId}.", userId);
+            _logger.LogInformation("Iniciando PerformSstAnalysisAsync para el usuario {UserId} y Org {OrganizationId}.", userId, organizationId);
             string promptParaUsar;
 
-            // 1. Determinar el Prompt (Lógica existente)
+            // 1. Determinar el Prompt a usar 
             if (!string.IsNullOrWhiteSpace(request.CustomPrompt))
             {
                 _logger.LogWarning("Usando prompt personalizado para el usuario {UserId}.", userId);
@@ -67,7 +58,7 @@ namespace VisioAnalytica.Infrastructure.Services
             }
             else
             {
-                _logger.LogInformation("Usando el prompt maestro de SST (nuestro modelo) cargado desde config.");
+                _logger.LogInformation("Usando el prompt maestro de SST.");
                 promptParaUsar = _masterSstPrompt;
             }
 
@@ -75,14 +66,15 @@ namespace VisioAnalytica.Infrastructure.Services
 
             try
             {
-                // 2. Convertir y llamar a la IA (Lógica existente)
+                // 2. Convertir y llamar a la IA
                 _logger.LogInformation("Convirtiendo imagen Base64 a byte[] y llamando a la IA...");
                 var imageBytes = Convert.FromBase64String(request.ImageBase64);
+
                 result = await _aiAnalyzer.AnalyzeImageAsync(imageBytes, promptParaUsar);
 
                 if (result == null)
                 {
-                    _logger.LogWarning("El conector IA (GeminiAnalyzer) devolvió un resultado nulo.");
+                    _logger.LogWarning("El conector IA (IAiSstAnalyzer) devolvió un resultado nulo.");
                     return null;
                 }
             }
@@ -97,28 +89,27 @@ namespace VisioAnalytica.Infrastructure.Services
                 throw;
             }
 
-            // 3. ¡NUEVA LÓGICA! Persistir el resultado en la BBDD
-
-            // NOTA: Asumimos que el token JWT contiene la OrganizationId y que
-            // la API (AnalysisController) la extrae y la pasa a este servicio,
-            // pero como no se ha modificado la firma, debemos asumir un placeholder
-            // o que la OrganizationId puede extraerse del User.
-            // Por ahora, usaremos un placeholder (Guid.Empty) que debe ser corregido
-            // cuando implementemos el token en AnalysisController.
+            // 3. Persistir el resultado en la BBDD (Capítulo 3)
 
             // 3.A: Construir la Inspección (cabecera)
+            if (!Guid.TryParse(userId, out var parsedUserId))
+            {
+                // Esto solo se lanza si el validador del controlador falla
+                _logger.LogError("Error de formato: El userId '{UserId}' no es un GUID válido.", userId);
+                throw new InvalidOperationException("El identificador de usuario no tiene un formato válido (GUID). Fallo en la autenticación.");
+            }
+
             var inspection = new Inspection
             {
-                UserId = Guid.Parse(userId), // Convertimos el string de userId (Guid)
-                // TO-DO: Necesitamos la OrganizationId del token del usuario para esto
-                // Usaremos un placeholder que debe ser válido (ej. Guid.NewGuid() si no la tenemos)
-                OrganizationId = Guid.NewGuid(), // <-- CORREGIR CUANDO SE LEA DEL TOKEN!
+                // ¡FIX FINAL! Usamos los GUIDs validados y pasados por argumento.
+                UserId = parsedUserId,
+                OrganizationId = organizationId,
 
                 // TO-DO: Guardar la URL real de la imagen (Blob Storage)
-                ImageUrl = "temp/image_b64_not_uploaded.jpg", // <-- CORREGIR CON LÓGICA DE BLOB
+                ImageUrl = "temp/image_b64_not_uploaded.jpg",
             };
 
-            // 3.B: Mapear los Hallazgos de la IA (SstAnalysisResult) a las Entidades (Finding)
+            // 3.B: Mapear los Hallazgos (SstAnalysisResult) a las Entidades (Finding)
             foreach (var hallazgo in result.Hallazgos)
             {
                 inspection.Findings.Add(new Finding
@@ -127,7 +118,6 @@ namespace VisioAnalytica.Infrastructure.Services
                     RiskLevel = hallazgo.NivelRiesgo,
                     CorrectiveAction = hallazgo.AccionCorrectiva,
                     PreventiveAction = hallazgo.AccionPreventiva,
-                    // InspectionId se asigna automáticamente al hacer Add a la colección de Findings.
                 });
             }
 
@@ -140,13 +130,10 @@ namespace VisioAnalytica.Infrastructure.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "ERROR CRÍTICO al guardar la Inspección en el repositorio para el usuario {UserId}. El resultado de la IA se perdió.", userId);
-                // Si la persistencia falla, lanzamos el error, pero el resultado de la IA (result) ya existe.
-                // Podríamos decidir devolver 'result' y solo loguear el fallo de persistencia,
-                // pero por ahora, la persistencia es crítica.
                 throw;
             }
 
-            // 4. Devolver el resultado de la IA (que es lo que espera el cliente API)
+            // 4. Devolver el resultado de la IA al Controller API.
             return result;
         }
     }

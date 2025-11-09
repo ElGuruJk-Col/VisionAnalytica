@@ -1,7 +1,4 @@
-﻿// En: src/Api/Extensions/DependencyInjectionExtensions.cs
-// (v5.0 - ¡INYECCIÓN DE REPORTES COMPLETADA!)
-
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;

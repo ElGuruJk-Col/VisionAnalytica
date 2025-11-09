@@ -1,10 +1,4 @@
-﻿// En: src/Api/Controllers/AuthController.cs
-// (¡VERSIÓN 2.0 - 100% PURA Y REFACTORIZADA!)
-// Tarea 30.E: Controlador "limpio" que solo "pasa la pelota"
-
-using Microsoft.AspNetCore.Mvc;
-using System; // Para Exception
-using System.Threading.Tasks; // Para Task
+﻿using Microsoft.AspNetCore.Mvc;
 using VisioAnalytica.Core.Interfaces; // ¡Importamos el nuevo contrato!
 using VisioAnalytica.Core.Models.Dtos; // ¡Importamos los DTOs desde Core!
 
@@ -19,7 +13,7 @@ namespace VisioAnalytica.Api.Controllers
 
         // (Los DTOs ya NO viven aquí. Han sido movidos a Core/Models/Dtos)
 
-        // --- Endpoint de Registro (¡LIMPIO!) ---
+        // --- Endpoint de Registro ---
         [HttpPost("register")]
         public async Task<ActionResult<UserDto>> Register(RegisterDto registerDto)
         {
@@ -44,7 +38,7 @@ namespace VisioAnalytica.Api.Controllers
             }
         }
 
-        // --- Endpoint de Login (¡LIMPIO!) ---
+        // --- Endpoint de Login ---
         [HttpPost("login")]
         public async Task<ActionResult<UserDto>> Login(LoginDto loginDto)
         {

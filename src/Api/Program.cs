@@ -25,7 +25,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "VisioAnalytica API v1");
-        options.RoutePrefix = string.Empty; // Swagger en la raíz (ej. http://localhost:5170/)
+        //options.RoutePrefix = string.Empty; // Swagger en la raíz (ej. http://localhost:5170/)
     });
 }
 

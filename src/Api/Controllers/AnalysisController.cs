@@ -1,22 +1,17 @@
-﻿// En: src/Api/Controllers/AnalysisController.cs
-// (v5.0 - REFACTORIZACIÓN FINAL Y FIX IDE0059)
-
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
+using VisioAnalytica.Api.Logging;
 using VisioAnalytica.Core.Interfaces;
 using VisioAnalytica.Core.Models;
 using VisioAnalytica.Core.Models.Dtos;
-using System.Security.Claims;
-using System;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using VisioAnalytica.Api.Logging;
 
 namespace VisioAnalytica.Api.Controllers
 {
     [ApiController]
     [Route("api/v1/[controller]")]
-    [Authorize] // ¡Todo este controlador requiere un Token JWT válido!
+    [Authorize]
+    // Usamos el Constructor Principal (moderno y limpio)
     public class AnalysisController(
         IAnalysisService analysisService,
         IReportService reportService,
@@ -25,10 +20,6 @@ namespace VisioAnalytica.Api.Controllers
         private readonly IAnalysisService _analysisService = analysisService;
         private readonly IReportService _reportService = reportService;
         private readonly ILogger<AnalysisController> _logger = logger;
-
-        // ===============================================
-        // --- MÉTODO PRIVADO: FIX ARQUITECTÓNICO ---
-        // ===============================================
 
         /// <summary>
         /// Intenta obtener el GUID de la organización del token JWT (claim "org_id").
@@ -43,9 +34,6 @@ namespace VisioAnalytica.Api.Controllers
                 return null;
             }
 
-            // Fix IDE0059: Si TryParse tiene éxito, el valor se asigna 
-            // y se devuelve en el mismo flujo. Si falla, devuelve null, 
-            // evitando la asignación redundante en el flujo de error.
             if (Guid.TryParse(orgIdString, out var organizationId))
             {
                 return organizationId;
@@ -62,6 +50,7 @@ namespace VisioAnalytica.Api.Controllers
         [ProducesResponseType(typeof(SstAnalysisResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> PerformSstAnalysis([FromBody] AnalysisRequestDto request)
         {
@@ -70,32 +59,40 @@ namespace VisioAnalytica.Api.Controllers
                 return BadRequest(ModelState);
             }
 
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            // Usamos 'uid' que es donde el TokenService guarda el ID
+            var userId = User.FindFirstValue("uid");
+            var organizationId = GetOrganizationIdFromClaims();
 
-            if (userId == null)
+            // Validación de seguridad
+            if (string.IsNullOrWhiteSpace(userId) || !organizationId.HasValue)
             {
-                return Unauthorized();
+                return StatusCode(StatusCodes.Status403Forbidden, "El identificador de usuario (uid) o de organización (org_id) está ausente o es inválido en el token.");
             }
 
             _logger.AnalysisRequestReceived(userId);
 
             try
             {
-                // TO-DO: Aquí se llamará al servicio con el OrganizationId cuando se implemente la extracción
-                var result = await _analysisService.PerformSstAnalysisAsync(request, userId);
+                // Ahora la firma del servicio toma 3 argumentos.
+                var result = await _analysisService.PerformSstAnalysisAsync(request, userId, organizationId.Value);
 
                 if (result == null)
                 {
                     _logger.AnalysisServiceReturnedNull(userId);
-                    return StatusCode(500, "El análisis no pudo ser completado.");
+                    return StatusCode(StatusCodes.Status500InternalServerError, "El análisis no pudo ser completado.");
                 }
 
                 return Ok(result);
             }
+            catch (InvalidOperationException ex)
+            {
+                // Capturamos el error de formato GUID o de prompt
+                return StatusCode(StatusCodes.Status403Forbidden, ex.Message);
+            }
             catch (Exception ex)
             {
                 _logger.CatastrophicError(userId, ex);
-                return StatusCode(500, "Ocurrió un error interno en el servidor.");
+                return StatusCode(StatusCodes.Status500InternalServerError, "Ocurrió un error interno en el servidor.");
             }
         }
 
@@ -105,23 +102,21 @@ namespace VisioAnalytica.Api.Controllers
 
         /// <summary>
         /// Obtiene el historial resumido de inspecciones para la organización del usuario.
-        /// (Implementa filtro Multi-Tenant extrayendo el ID del Token JWT).
         /// </summary>
+        
+        
         [HttpGet("history")]
         [ProducesResponseType(typeof(IReadOnlyList<InspectionSummaryDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetInspectionHistory()
         {
-            // --- ¡USO DEL HELPER PARA LIMPIAR EL CÓDIGO! ---
             var organizationId = GetOrganizationIdFromClaims();
 
             if (!organizationId.HasValue)
             {
                 return Unauthorized("Token JWT inválido o sin ID de organización.");
             }
-            // ------------------------------------------------
 
             try
             {
@@ -137,7 +132,7 @@ namespace VisioAnalytica.Api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error consultando el historial para la Organización {OrganizationId}.", organizationId);
-                return StatusCode(500, "Ocurrió un error interno consultando el historial.");
+                return StatusCode(StatusCodes.Status500InternalServerError, "Ocurrió un error interno consultando el historial.");
             }
         }
 
@@ -152,14 +147,12 @@ namespace VisioAnalytica.Api.Controllers
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetInspectionDetails(Guid inspectionId)
         {
-            // --- ¡USO DEL HELPER PARA LIMPIAR EL CÓDIGO! ---
             var organizationId = GetOrganizationIdFromClaims();
 
             if (!organizationId.HasValue)
             {
                 return Unauthorized("Token JWT inválido o sin ID de organización.");
             }
-            // ------------------------------------------------
 
             try
             {
@@ -175,7 +168,7 @@ namespace VisioAnalytica.Api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error consultando detalles de inspección {InspectionId}.", inspectionId);
-                return StatusCode(500, "Ocurrió un error interno consultando el detalle.");
+                return StatusCode(StatusCodes.Status500InternalServerError, "Ocurrió un error interno consultando el detalle.");
             }
         }
     }
