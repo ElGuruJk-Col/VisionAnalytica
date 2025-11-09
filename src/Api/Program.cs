@@ -1,41 +1,43 @@
+// En: src/Api/Program.cs
+// (¡VERSIÓN 5.0 - REFACTORIZADA!)
+
+using VisioAnalytica.Api.Extensions; // <-- 1. ¡IMPORTAMOS NUESTRA "CAJA DE HERRAMIENTAS"!
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// --- "CABLEADO" DE SERVICIOS ---
+// ¡Limpieza! Llamamos a nuestro nuevo Método de Extensión.
+// Le pasamos el 'builder.Services' (el registro),
+// el 'builder.Configuration' (para leer appsettings.json)
+// y el 'builder.Environment' (para saber si es 'Development')
+builder.Services.AddApplicationServices(builder.Configuration, builder.Environment);
 
+// --- CONSTRUIMOS LA APP ---
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// --- CONFIGURACIÓN DEL PIPELINE HTTP ---
+// (Este orden es vital)
+
+// 1. Habilitar Swagger (SOLO en modo "Development")
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "VisioAnalytica API v1");
+        //options.RoutePrefix = string.Empty; // Swagger en la raíz (ej. http://localhost:5170/)
+    });
 }
 
+// 2. Redirección HTTPS (seguridad)
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+// 3. ¡VITAL! Habilitar Autenticación y Autorización
+app.UseAuthentication(); // ¿Quién eres? (Lee el token)
+app.UseAuthorization();  // ¿Tienes permiso? (Comprueba el token)
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+// 4. Mapear los Controllers (el "recepcionista")
+app.MapControllers();
 
+// 5. ¡Arrancar!
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
