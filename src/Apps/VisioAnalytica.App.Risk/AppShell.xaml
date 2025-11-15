@@ -4,11 +4,45 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:VisioAnalytica.App.Risk"
-    Title="VisioAnalytica.App.Risk">
+    xmlns:pages="clr-namespace:VisioAnalytica.App.Risk.Pages"
+    Title="VisioAnalytica Risk">
 
+    <!-- Login Page (Initial) -->
     <ShellContent
-        Title="Home"
-        ContentTemplate="{DataTemplate local:MainPage}"
-        Route="MainPage" />
+        Title="Login"
+        ContentTemplate="{DataTemplate pages:LoginPage}"
+        Route="LoginPage" />
+
+    <!-- Main Pages (After Login) -->
+    <TabBar Route="MainPage">
+        <ShellContent
+            Title="Inicio"
+            ContentTemplate="{DataTemplate local:MainPage}"
+            Icon="home.png" />
+
+        <ShellContent
+            Title="Capturar"
+            ContentTemplate="{DataTemplate pages:CapturePage}"
+            Route="CapturePage"
+            Icon="camera.png" />
+
+        <ShellContent
+            Title="Historial"
+            ContentTemplate="{DataTemplate pages:HistoryPage}"
+            Route="HistoryPage"
+            Icon="history.png" />
+    </TabBar>
+
+    <!-- Register Page -->
+    <ShellContent
+        Title="Registro"
+        ContentTemplate="{DataTemplate pages:RegisterPage}"
+        Route="RegisterPage" />
+
+    <!-- Results Page -->
+    <ShellContent
+        Title="Resultados"
+        ContentTemplate="{DataTemplate pages:ResultsPage}"
+        Route="ResultsPage" />
 
 </Shell>

@@ -78,10 +78,7 @@ namespace VisioAnalytica.Infrastructure.Services
                 Id: i.Id,
                 AnalysisDate: i.AnalysisDate,
                 ImageUrl: i.ImageUrl,
-                // NOTA: Para obtener el UserName, el repositorio debería incluirlo.
-                // Como es solo un resumen, lo dejaremos como placeholder por ahora
-                // o lo rellenaremos con el Email/Id si el repositorio no lo trajo.
-                UserName: $"Usuario ID: {i.UserId.ToString()[..4]}...",
+                UserName: i.User.UserName ?? i.User.Email ?? $"Usuario {i.UserId}", // UserName real del usuario
                 TotalFindings: i.Findings.Count
             )).ToList();
 

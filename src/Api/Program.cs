@@ -1,12 +1,13 @@
 // En: src/Api/Program.cs
-// (¡VERSIÓN 5.0 - REFACTORIZADA!)
+// (VERSIÃ“N 5.0 - REFACTORIZADA!)
 
-using VisioAnalytica.Api.Extensions; // <-- 1. ¡IMPORTAMOS NUESTRA "CAJA DE HERRAMIENTAS"!
+using VisioAnalytica.Api.Extensions; // <-- 1. Â¡IMPORTAMOS NUESTRA "CAJA DE HERRAMIENTAS"!
+using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // --- "CABLEADO" DE SERVICIOS ---
-// ¡Limpieza! Llamamos a nuestro nuevo Método de Extensión.
+// Â¡Limpieza! Llamamos a nuestro nuevo MÃ©todo de ExtensiÃ³n.
 // Le pasamos el 'builder.Services' (el registro),
 // el 'builder.Configuration' (para leer appsettings.json)
 // y el 'builder.Environment' (para saber si es 'Development')
@@ -15,7 +16,7 @@ builder.Services.AddApplicationServices(builder.Configuration, builder.Environme
 // --- CONSTRUIMOS LA APP ---
 var app = builder.Build();
 
-// --- CONFIGURACIÓN DEL PIPELINE HTTP ---
+// --- CONFIGURACIÃ“N DEL PIPELINE HTTP ---
 // (Este orden es vital)
 
 // 1. Habilitar Swagger (SOLO en modo "Development")
@@ -25,19 +26,25 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "VisioAnalytica API v1");
-        //options.RoutePrefix = string.Empty; // Swagger en la raíz (ej. http://localhost:5170/)
+        //options.RoutePrefix = string.Empty; // Swagger en la raÃ­z (ej. http://localhost:5170/)
     });
 }
 
-// 2. Redirección HTTPS (seguridad)
+// 2. RedirecciÃ³n HTTPS (seguridad)
 app.UseHttpsRedirection();
 
-// 3. ¡VITAL! Habilitar Autenticación y Autorización
-app.UseAuthentication(); // ¿Quién eres? (Lee el token)
-app.UseAuthorization();  // ¿Tienes permiso? (Comprueba el token)
+// 2.5. Habilitar archivos estÃ¡ticos (para servir imÃ¡genes de wwwroot/uploads)
+// NOTA: Los archivos de uploads ahora se sirven a travÃ©s del FileController
+// que requiere autenticaciÃ³n y verifica permisos por organizaciÃ³n.
+// Por lo tanto, NO exponemos /uploads pÃºblicamente.
+app.UseStaticFiles();
+
+// 3. Â¡VITAL! Habilitar AutenticaciÃ³n y AutorizaciÃ³n
+app.UseAuthentication(); // Â¿QuiÃ©n eres? (Lee el token)
+app.UseAuthorization();  // Â¿Tienes permiso? (Comprueba el token)
 
 // 4. Mapear los Controllers (el "recepcionista")
 app.MapControllers();
 
-// 5. ¡Arrancar!
+// 5. Â¡Arrancar!
 app.Run();

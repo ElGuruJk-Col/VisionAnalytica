@@ -14,11 +14,13 @@ namespace VisioAnalytica.Infrastructure.Services
     public class AnalysisService(
         IAiSstAnalyzer aiAnalyzer,
         IAnalysisRepository analysisRepository,
+        IFileStorage fileStorage,
         ILogger<AnalysisService> logger,
         IConfiguration configuration) : IAnalysisService
     {
         private readonly IAiSstAnalyzer _aiAnalyzer = aiAnalyzer;
         private readonly IAnalysisRepository _analysisRepository = analysisRepository;
+        private readonly IFileStorage _fileStorage = fileStorage;
         private readonly ILogger<AnalysisService> _logger = logger;
         private readonly string _masterSstPrompt = GetMasterSstPrompt(configuration, logger);
 
@@ -64,12 +66,36 @@ namespace VisioAnalytica.Infrastructure.Services
 
             SstAnalysisResult? result;
 
+            byte[] imageBytes;
             try
             {
-                // 2. Convertir y llamar a la IA
-                _logger.LogInformation("Convirtiendo imagen Base64 a byte[] y llamando a la IA...");
-                var imageBytes = Convert.FromBase64String(request.ImageBase64);
+                // 2. Convertir Base64 a byte[]
+                _logger.LogInformation("Convirtiendo imagen Base64 a byte[]...");
+                imageBytes = Convert.FromBase64String(request.ImageBase64);
+            }
+            catch (FormatException ex)
+            {
+                _logger.LogWarning(ex, "El string Base64 recibido del usuario {UserId} no es válido. No se puede convertir.", userId);
+                return null;
+            }
 
+            // 2.5. Guardar la imagen ANTES de llamar a la IA
+            string imageUrl;
+            try
+            {
+                imageUrl = await _fileStorage.SaveImageAsync(imageBytes, null, organizationId);
+                _logger.LogInformation("Imagen guardada en: {ImageUrl}", imageUrl);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al guardar la imagen para el usuario {UserId}.", userId);
+                throw new InvalidOperationException("No se pudo guardar la imagen. El análisis se canceló.", ex);
+            }
+
+            // 3. Llamar a la IA
+            try
+            {
+                _logger.LogInformation("Llamando a la IA para análisis...");
                 result = await _aiAnalyzer.AnalyzeImageAsync(imageBytes, promptParaUsar);
 
                 if (result == null)
@@ -77,11 +103,10 @@ namespace VisioAnalytica.Infrastructure.Services
                     _logger.LogWarning("El conector IA (IAiSstAnalyzer) devolvió un resultado nulo.");
                     return null;
                 }
-            }
-            catch (FormatException ex)
-            {
-                _logger.LogWarning(ex, "El string Base64 recibido del usuario {UserId} no es válido. No se puede convertir.", userId);
-                return null;
+
+                // Asignar la ImageUrl al resultado de la IA
+                result = result with { ImageUrl = imageUrl };
+                _logger.LogInformation("ImageUrl agregada al resultado: {ImageUrl}", imageUrl);
             }
             catch (Exception ex)
             {
@@ -89,9 +114,9 @@ namespace VisioAnalytica.Infrastructure.Services
                 throw;
             }
 
-            // 3. Persistir el resultado en la BBDD (Capítulo 3)
+            // 4. Persistir el resultado en la BBDD
 
-            // 3.A: Construir la Inspección (cabecera)
+            // 4.A: Construir la Inspección (cabecera)
             if (!Guid.TryParse(userId, out var parsedUserId))
             {
                 // Esto solo se lanza si el validador del controlador falla
@@ -101,15 +126,13 @@ namespace VisioAnalytica.Infrastructure.Services
 
             var inspection = new Inspection
             {
-                // ¡FIX FINAL! Usamos los GUIDs validados y pasados por argumento.
+                // Usamos los GUIDs validados y pasados por argumento.
                 UserId = parsedUserId,
                 OrganizationId = organizationId,
-
-                // TO-DO: Guardar la URL real de la imagen (Blob Storage)
-                ImageUrl = "temp/image_b64_not_uploaded.jpg",
+                ImageUrl = imageUrl, // URL real de la imagen guardada
             };
 
-            // 3.B: Mapear los Hallazgos (SstAnalysisResult) a las Entidades (Finding)
+            // 4.B: Mapear los Hallazgos (SstAnalysisResult) a las Entidades (Finding)
             foreach (var hallazgo in result.Hallazgos)
             {
                 inspection.Findings.Add(new Finding
@@ -123,7 +146,7 @@ namespace VisioAnalytica.Infrastructure.Services
 
             try
             {
-                // 3.C: Guardar en el Repositorio
+                // 4.C: Guardar en el Repositorio
                 await _analysisRepository.SaveInspectionAsync(inspection);
                 _logger.LogInformation("Inspección {InspectionId} persistida en la BBDD para el usuario {UserId}.", inspection.Id, userId);
             }
@@ -133,7 +156,7 @@ namespace VisioAnalytica.Infrastructure.Services
                 throw;
             }
 
-            // 4. Devolver el resultado de la IA al Controller API.
+            // 5. Devolver el resultado de la IA al Controller API.
             return result;
         }
     }

@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="VisioAnalytica.App.Risk.Pages.CapturePage"
+             Title="Capturar Foto">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="20">
+            
+            <!-- Instructions -->
+            <Label 
+                Text="Captura una foto del área a inspeccionar"
+                FontSize="18"
+                FontAttributes="Bold"
+                HorizontalOptions="Center"
+                Margin="0,0,0,20" />
+
+            <!-- Image Preview -->
+            <Border 
+                x:Name="ImagePreviewBorder"
+                Stroke="Gray"
+                StrokeThickness="2"
+                StrokeShape="RoundRectangle 10"
+                HeightRequest="300"
+                Margin="0,0,0,20">
+                <Grid>
+                    <Image 
+                        x:Name="CapturedImage"
+                        Aspect="AspectFit"
+                        IsVisible="False"
+                        VerticalOptions="Fill"
+                        HorizontalOptions="Fill" />
+                    <Label 
+                        Text="No hay imagen capturada"
+                        VerticalOptions="Center"
+                        HorizontalOptions="Center"
+                        TextColor="Gray"
+                        x:Name="PlaceholderLabel" />
+                </Grid>
+            </Border>
+
+            <!-- Capture Button -->
+            <Button 
+                x:Name="CaptureButton"
+                Text="Tomar Foto"
+                Clicked="OnCaptureClicked"
+                BackgroundColor="#512BD4"
+                TextColor="White"
+                CornerRadius="10"
+                HeightRequest="50" />
+
+            <!-- Analyze Button -->
+            <Button 
+                x:Name="AnalyzeButton"
+                Text="Analizar Imagen"
+                Clicked="OnAnalyzeClicked"
+                BackgroundColor="#28A745"
+                TextColor="White"
+                CornerRadius="10"
+                HeightRequest="50"
+                IsEnabled="False" />
+
+            <!-- Loading Indicator -->
+            <ActivityIndicator 
+                x:Name="LoadingIndicator"
+                IsRunning="False"
+                IsVisible="False"
+                Margin="0,20,0,0" />
+
+            <!-- Status Message -->
+            <Label 
+                x:Name="StatusLabel"
+                FontSize="14"
+                HorizontalOptions="Center"
+                Margin="0,10,0,0"
+                IsVisible="False" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
+

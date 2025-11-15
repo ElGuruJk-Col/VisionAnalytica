@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="VisioAnalytica.App.Risk.Pages.RegisterPage"
+             Title="Registro">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="30,60,30,30" Spacing="20">
+            
+            <!-- Header -->
+            <Label 
+                Text="Crear Cuenta"
+                FontSize="28"
+                FontAttributes="Bold"
+                HorizontalOptions="Center"
+                Margin="0,0,0,20" />
+
+            <!-- First Name -->
+            <Label Text="Nombre" FontSize="14" FontAttributes="Bold" />
+            <Entry 
+                x:Name="FirstNameEntry"
+                Placeholder="Tu nombre"
+                Text="{Binding FirstName}" />
+
+            <!-- Last Name -->
+            <Label Text="Apellido" FontSize="14" FontAttributes="Bold" Margin="0,10,0,0" />
+            <Entry 
+                x:Name="LastNameEntry"
+                Placeholder="Tu apellido"
+                Text="{Binding LastName}" />
+
+            <!-- Email -->
+            <Label Text="Email" FontSize="14" FontAttributes="Bold" Margin="0,10,0,0" />
+            <Entry 
+                x:Name="EmailEntry"
+                Placeholder="tu@email.com"
+                Keyboard="Email"
+                Text="{Binding Email}" />
+
+            <!-- Organization Name -->
+            <Label Text="Nombre de la Organización" FontSize="14" FontAttributes="Bold" Margin="0,10,0,0" />
+            <Entry 
+                x:Name="OrganizationEntry"
+                Placeholder="Nombre de tu empresa"
+                Text="{Binding OrganizationName}" />
+
+            <!-- Password -->
+            <Label Text="Contraseña" FontSize="14" FontAttributes="Bold" Margin="0,10,0,0" />
+            <Entry 
+                x:Name="PasswordEntry"
+                Placeholder="Mínimo 4 caracteres"
+                IsPassword="True"
+                Text="{Binding Password}" />
+
+            <!-- Confirm Password -->
+            <Label Text="Confirmar Contraseña" FontSize="14" FontAttributes="Bold" Margin="0,10,0,0" />
+            <Entry 
+                x:Name="ConfirmPasswordEntry"
+                Placeholder="Repite tu contraseña"
+                IsPassword="True"
+                Text="{Binding ConfirmPassword}" />
+
+            <!-- Error Message -->
+            <Label 
+                x:Name="ErrorLabel"
+                TextColor="Red"
+                FontSize="12"
+                IsVisible="False"
+                Margin="0,10,0,0" />
+
+            <!-- Loading Indicator -->
+            <ActivityIndicator 
+                x:Name="LoadingIndicator"
+                IsRunning="False"
+                IsVisible="False"
+                Margin="0,10,0,0" />
+
+            <!-- Register Button -->
+            <Button 
+                x:Name="RegisterButton"
+                Text="Registrarse"
+                Clicked="OnRegisterClicked"
+                BackgroundColor="#512BD4"
+                TextColor="White"
+                CornerRadius="10"
+                Margin="0,20,0,0"
+                HeightRequest="50" />
+
+            <!-- Back to Login -->
+            <Button 
+                x:Name="BackButton"
+                Text="¿Ya tienes cuenta? Inicia Sesión"
+                Clicked="OnBackClicked"
+                BackgroundColor="Transparent"
+                TextColor="#512BD4"
+                Margin="0,10,0,0" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
+
