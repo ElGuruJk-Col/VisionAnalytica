@@ -89,6 +89,11 @@ namespace VisioAnalytica.Api.Extensions
             // 4.G: ¡NUEVO REGISTRO! El Servicio de Almacenamiento de Archivos (Capítulo 5)
             services.AddScoped<IFileStorage, LocalFileStorage>(); // << ¡AÑADIDO!
 
+            // 4.H: ¡NUEVO REGISTRO! Servicios de Gestión de Usuarios y Empresas Afiliadas
+            services.AddScoped<IUserManagementService, UserManagementService>();
+            services.AddScoped<IAffiliatedCompanyService, AffiliatedCompanyService>();
+            services.AddScoped<RoleSeederService>();
+
 
             // --- 5. SERVICIOS ESTÁNDAR DE API ---
             services.AddControllers();

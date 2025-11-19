@@ -12,7 +12,7 @@ using VisioAnalytica.Infrastructure.Data;
 namespace VisioAnalytica.Infrastructure.Migrations
 {
     [DbContext(typeof(VisioAnalyticaDbContext))]
-    [Migration("20251119220210_AddRolesAndAffiliatedCompanies")]
+    [Migration("20251119221743_AddRolesAndAffiliatedCompanies")]
     partial class AddRolesAndAffiliatedCompanies
     {
         /// <inheritdoc />
