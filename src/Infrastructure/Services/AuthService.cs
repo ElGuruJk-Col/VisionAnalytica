@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
 using VisioAnalytica.Core.Interfaces;
 using VisioAnalytica.Core.Models;
 using VisioAnalytica.Core.Models.Dtos;
@@ -8,11 +9,15 @@ namespace VisioAnalytica.Infrastructure.Services
 {
     public class AuthService(VisioAnalyticaDbContext context,
                        UserManager<User> userManager,
-                       ITokenService tokenService) : IAuthService
+                       ITokenService tokenService,
+                       IEmailService? emailService = null,
+                       IConfiguration? configuration = null) : IAuthService
     {
         private readonly VisioAnalyticaDbContext _context = context;
         private readonly UserManager<User> _userManager = userManager;
         private readonly ITokenService _tokenService = tokenService;
+        private readonly IEmailService? _emailService = emailService;
+        private readonly IConfiguration? _configuration = configuration;
 
         public async Task<UserDto> LoginAsync(LoginDto loginDto)
         {
@@ -90,6 +95,102 @@ namespace VisioAnalytica.Infrastructure.Services
                 await transaction.RollbackAsync();
                 throw;
             }
+        }
+
+        public async Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordDto changePasswordDto)
+        {
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null)
+            {
+                throw new ArgumentException("Usuario no encontrado.");
+            }
+
+            if (!user.IsActive)
+            {
+                throw new UnauthorizedAccessException("La cuenta de usuario está inactiva.");
+            }
+
+            var result = await _userManager.ChangePasswordAsync(user, changePasswordDto.CurrentPassword, changePasswordDto.NewPassword);
+            if (!result.Succeeded)
+            {
+                throw new InvalidOperationException($"Error al cambiar la contraseña: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            }
+
+            // Actualizar fecha de cambio de contraseña y marcar que ya no debe cambiarla
+            user.PasswordChangedAt = DateTime.UtcNow;
+            user.MustChangePassword = false;
+            await _userManager.UpdateAsync(user);
+
+            return true;
+        }
+
+        public async Task<bool> ForgotPasswordAsync(ForgotPasswordDto forgotPasswordDto)
+        {
+            var user = await _userManager.FindByEmailAsync(forgotPasswordDto.Email);
+            if (user == null)
+            {
+                // Por seguridad, no revelamos si el email existe o no
+                return true;
+            }
+
+            if (!user.IsActive)
+            {
+                // Por seguridad, no revelamos si la cuenta está inactiva
+                return true;
+            }
+
+            // Generar token de recuperación de contraseña
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            
+            // Construir URL de restablecimiento
+            var baseUrl = _configuration?["App:BaseUrl"] ?? "https://app.visioanalytica.com";
+            var resetUrl = $"{baseUrl}/reset-password";
+
+            // Enviar email con el token
+            if (_emailService != null)
+            {
+                var emailSent = await _emailService.SendPasswordResetEmailAsync(user.Email!, token, resetUrl);
+                if (!emailSent)
+                {
+                    // Log el error pero no fallar la operación (por seguridad)
+                    Console.WriteLine($"[WARNING] No se pudo enviar el email de recuperación a {user.Email}");
+                }
+            }
+            else
+            {
+                // En desarrollo, si no hay servicio de email configurado, loguear el token
+                Console.WriteLine($"[DEV ONLY] Token de recuperación para {user.Email}: {token}");
+                Console.WriteLine($"[DEV ONLY] URL: {resetUrl}?token={token}");
+            }
+
+            return true;
+        }
+
+        public async Task<bool> ResetPasswordAsync(ResetPasswordDto resetPasswordDto)
+        {
+            var user = await _userManager.FindByEmailAsync(resetPasswordDto.Email);
+            if (user == null)
+            {
+                throw new ArgumentException("Usuario no encontrado.");
+            }
+
+            if (!user.IsActive)
+            {
+                throw new UnauthorizedAccessException("La cuenta de usuario está inactiva.");
+            }
+
+            var result = await _userManager.ResetPasswordAsync(user, resetPasswordDto.Token, resetPasswordDto.NewPassword);
+            if (!result.Succeeded)
+            {
+                throw new InvalidOperationException($"Error al restablecer la contraseña: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            }
+
+            // Actualizar fecha de cambio de contraseña y marcar que ya no debe cambiarla
+            user.PasswordChangedAt = DateTime.UtcNow;
+            user.MustChangePassword = false;
+            await _userManager.UpdateAsync(user);
+
+            return true;
         }
     }
 }
