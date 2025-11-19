@@ -26,7 +26,7 @@ public partial class CapturePage : ContentPage
                 cameraStatus = await Permissions.RequestAsync<Permissions.Camera>();
                 if (cameraStatus != PermissionStatus.Granted)
                 {
-                    await DisplayAlert(
+                    await DisplayAlertAsync(
                         "Permisos Requeridos", 
                         "Se requiere permiso de cámara para tomar fotos. Por favor, habilita el permiso en Configuración > Apps > VisioAnalytica Risk > Permisos.", 
                         "OK");
@@ -53,7 +53,7 @@ public partial class CapturePage : ContentPage
 
                 if (readStorageStatus != PermissionStatus.Granted || writeStorageStatus != PermissionStatus.Granted)
                 {
-                    await DisplayAlert(
+                    await DisplayAlertAsync(
                         "Permisos Requeridos", 
                         "Se requieren permisos de almacenamiento para guardar fotos. Por favor, habilítalos en Configuración > Apps > VisioAnalytica Risk > Permisos.", 
                         "OK");
@@ -96,7 +96,7 @@ public partial class CapturePage : ContentPage
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Error", $"Error al capturar foto: {ex.Message}", "OK");
+            await DisplayAlertAsync("Error", $"Error al capturar foto: {ex.Message}", "OK");
         }
     }
 
@@ -104,7 +104,7 @@ public partial class CapturePage : ContentPage
     {
         if (_capturedImageBytes == null || _capturedImageBytes.Length == 0)
         {
-            await DisplayAlert("Error", "No hay imagen para analizar", "OK");
+            await DisplayAlertAsync("Error", "No hay imagen para analizar", "OK");
             return;
         }
 
@@ -131,7 +131,7 @@ public partial class CapturePage : ContentPage
                 }
                 catch (Exception ex)
                 {
-                    await DisplayAlert(
+                    await DisplayAlertAsync(
                         "Error", 
                         $"Error al navegar a la página de resultados: {ex.Message}", 
                         "OK");
@@ -139,16 +139,16 @@ public partial class CapturePage : ContentPage
             }
             else
             {
-                await DisplayAlert("Error", "No se pudo analizar la imagen", "OK");
+                await DisplayAlertAsync("Error", "No se pudo analizar la imagen", "OK");
             }
         }
         catch (ApiException ex)
         {
-            await DisplayAlert("Error", $"Error al analizar: {ex.Message}", "OK");
+            await DisplayAlertAsync("Error", $"Error al analizar: {ex.Message}", "OK");
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Error", $"Error inesperado: {ex.Message}", "OK");
+            await DisplayAlertAsync("Error", $"Error inesperado: {ex.Message}", "OK");
         }
         finally
         {

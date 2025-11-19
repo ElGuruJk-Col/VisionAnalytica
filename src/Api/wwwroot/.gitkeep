@@ -1,0 +1,3 @@
+# Esta carpeta se mantiene para evitar el warning de WebRootPath no encontrado
+# Los archivos estáticos se sirven a través del FileController con autenticación
+

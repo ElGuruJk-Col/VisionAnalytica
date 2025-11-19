@@ -36,7 +36,7 @@ public partial class MainPage : ContentPage
 
 	private async void OnLogoutClicked(object? sender, EventArgs e)
 	{
-		var confirm = await DisplayAlert("Cerrar Sesión", "¿Estás seguro de que deseas cerrar sesión?", "Sí", "No");
+		var confirm = await DisplayAlertAsync("Cerrar Sesión", "¿Estás seguro de que deseas cerrar sesión?", "Sí", "No");
 		if (confirm)
 		{
 			await _authService.LogoutAsync();
