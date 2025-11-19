@@ -91,5 +91,85 @@ namespace VisioAnalytica.Infrastructure.Services
                 throw;
             }
         }
+
+        public async Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordDto changePasswordDto)
+        {
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null)
+            {
+                throw new ArgumentException("Usuario no encontrado.");
+            }
+
+            if (!user.IsActive)
+            {
+                throw new UnauthorizedAccessException("La cuenta de usuario está inactiva.");
+            }
+
+            var result = await _userManager.ChangePasswordAsync(user, changePasswordDto.CurrentPassword, changePasswordDto.NewPassword);
+            if (!result.Succeeded)
+            {
+                throw new InvalidOperationException($"Error al cambiar la contraseña: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            }
+
+            // Actualizar fecha de cambio de contraseña y marcar que ya no debe cambiarla
+            user.PasswordChangedAt = DateTime.UtcNow;
+            user.MustChangePassword = false;
+            await _userManager.UpdateAsync(user);
+
+            return true;
+        }
+
+        public async Task<bool> ForgotPasswordAsync(ForgotPasswordDto forgotPasswordDto)
+        {
+            var user = await _userManager.FindByEmailAsync(forgotPasswordDto.Email);
+            if (user == null)
+            {
+                // Por seguridad, no revelamos si el email existe o no
+                return true;
+            }
+
+            if (!user.IsActive)
+            {
+                // Por seguridad, no revelamos si la cuenta está inactiva
+                return true;
+            }
+
+            // Generar token de recuperación de contraseña
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            
+            // TODO: Enviar email con el token
+            // Por ahora, solo logueamos el token (en producción, esto debe enviarse por email)
+            // En desarrollo, podrías exponer esto temporalmente, pero NUNCA en producción
+            Console.WriteLine($"[DEV ONLY] Token de recuperación para {user.Email}: {token}");
+
+            return true;
+        }
+
+        public async Task<bool> ResetPasswordAsync(ResetPasswordDto resetPasswordDto)
+        {
+            var user = await _userManager.FindByEmailAsync(resetPasswordDto.Email);
+            if (user == null)
+            {
+                throw new ArgumentException("Usuario no encontrado.");
+            }
+
+            if (!user.IsActive)
+            {
+                throw new UnauthorizedAccessException("La cuenta de usuario está inactiva.");
+            }
+
+            var result = await _userManager.ResetPasswordAsync(user, resetPasswordDto.Token, resetPasswordDto.NewPassword);
+            if (!result.Succeeded)
+            {
+                throw new InvalidOperationException($"Error al restablecer la contraseña: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            }
+
+            // Actualizar fecha de cambio de contraseña y marcar que ya no debe cambiarla
+            user.PasswordChangedAt = DateTime.UtcNow;
+            user.MustChangePassword = false;
+            await _userManager.UpdateAsync(user);
+
+            return true;
+        }
     }
 }
