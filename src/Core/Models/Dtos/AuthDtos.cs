@@ -17,4 +17,31 @@ namespace VisioAnalytica.Core.Models.Dtos
     /// DTO que se devuelve al cliente tras un login/registro exitoso.
     /// </summary>
     public record UserDto(string Email, string FirstName, string Token);
+
+    /// <summary>
+    /// DTO para cambiar la contraseña.
+    /// </summary>
+    public class ChangePasswordDto
+    {
+        public string CurrentPassword { get; set; } = null!;
+        public string NewPassword { get; set; } = null!;
+    }
+
+    /// <summary>
+    /// DTO para solicitar recuperación de contraseña.
+    /// </summary>
+    public class ForgotPasswordDto
+    {
+        public string Email { get; set; } = null!;
+    }
+
+    /// <summary>
+    /// DTO para restablecer la contraseña con token.
+    /// </summary>
+    public class ResetPasswordDto
+    {
+        public string Email { get; set; } = null!;
+        public string Token { get; set; } = null!;
+        public string NewPassword { get; set; } = null!;
+    }
 }

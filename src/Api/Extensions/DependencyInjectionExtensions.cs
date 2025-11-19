@@ -94,6 +94,25 @@ namespace VisioAnalytica.Api.Extensions
             services.AddScoped<IAffiliatedCompanyService, AffiliatedCompanyService>();
             services.AddScoped<RoleSeederService>();
 
+            // 4.I: ¡NUEVO REGISTRO! Servicio de Email (Configurable: SMTP o SendGrid)
+            var emailProvider = config["Email:Provider"] ?? "Smtp";
+            if (emailProvider == "SendGrid")
+            {
+                // TODO: Implementar SendGridEmailService cuando sea necesario
+                // services.AddScoped<IEmailService, SendGridEmailService>();
+                // services.AddSingleton<SendGridClient>(sp => 
+                //     new SendGridClient(config["Email:SendGrid:ApiKey"]));
+                throw new InvalidOperationException("SendGrid aún no está implementado. Usa 'Smtp' para desarrollo.");
+            }
+            else if (emailProvider == "Smtp")
+            {
+                services.AddScoped<IEmailService, SmtpEmailService>();
+            }
+            else
+            {
+                throw new InvalidOperationException($"Email provider '{emailProvider}' no es válido. Use 'Smtp' o 'SendGrid'.");
+            }
+
 
             // --- 5. SERVICIOS ESTÁNDAR DE API ---
             services.AddControllers();
