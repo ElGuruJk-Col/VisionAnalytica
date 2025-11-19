@@ -1,7 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using System.Security.Claims;
+using VisioAnalytica.Core.Constants;
 using VisioAnalytica.Core.Interfaces;
+using VisioAnalytica.Core.Models;
+using VisioAnalytica.Infrastructure.Data;
 
 namespace VisioAnalytica.Api.Controllers
 {
@@ -17,23 +23,45 @@ namespace VisioAnalytica.Api.Controllers
         private readonly IFileStorage _fileStorage;
         private readonly IWebHostEnvironment _environment;
         private readonly ILogger<FileController> _logger;
+        private readonly VisioAnalyticaDbContext _context;
+        private readonly UserManager<User> _userManager;
+        private readonly IConfiguration _configuration;
 
         public FileController(
             IFileStorage fileStorage,
             IWebHostEnvironment environment,
-            ILogger<FileController> logger)
+            ILogger<FileController> logger,
+            VisioAnalyticaDbContext context,
+            UserManager<User> userManager,
+            IConfiguration configuration)
         {
             _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));
             _environment = environment ?? throw new ArgumentNullException(nameof(environment));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _context = context ?? throw new ArgumentNullException(nameof(context));
+            _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
 
         /// <summary>
-        /// Obtiene el GUID de la organización del token JWT (claim "org_id").
+        /// Obtiene el ID del usuario autenticado desde el token JWT.
+        /// </summary>
+        private Guid? GetCurrentUserId()
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+            {
+                return null;
+            }
+            return userId;
+        }
+
+        /// <summary>
+        /// Obtiene el GUID de la organización del token JWT (claim "organization_id").
         /// </summary>
         private Guid? GetOrganizationIdFromClaims()
         {
-            var orgIdString = User.FindFirstValue("org_id");
+            var orgIdString = User.FindFirst("organization_id")?.Value;
             if (string.IsNullOrWhiteSpace(orgIdString) || !Guid.TryParse(orgIdString, out var organizationId))
             {
                 return null;
@@ -42,82 +70,143 @@ namespace VisioAnalytica.Api.Controllers
         }
 
         /// <summary>
+        /// Verifica si el usuario tiene uno de los roles especificados.
+        /// </summary>
+        private bool HasAnyRole(params string[] roles)
+        {
+            return User.Claims.Any(c => c.Type == ClaimTypes.Role && roles.Contains(c.Value));
+        }
+
+        /// <summary>
+        /// Verifica si el usuario tiene acceso a una imagen basado en su rol y empresa afiliada.
+        /// </summary>
+        private async Task<bool> HasAccessToImageAsync(Guid organizationId, string fileName, Guid? affiliatedCompanyId = null)
+        {
+            var currentUserId = GetCurrentUserId();
+            if (!currentUserId.HasValue)
+            {
+                return false;
+            }
+
+            var userOrgId = GetOrganizationIdFromClaims();
+            if (!userOrgId.HasValue)
+            {
+                return false;
+            }
+
+            // SuperAdmin puede acceder a todo
+            if (HasAnyRole(Roles.SuperAdmin))
+            {
+                return true;
+            }
+
+            // Admin puede acceder a imágenes de su organización
+            if (HasAnyRole(Roles.Admin))
+            {
+                return userOrgId.Value == organizationId;
+            }
+
+            // Inspector: puede acceder a imágenes de empresas asignadas
+            if (HasAnyRole(Roles.Inspector))
+            {
+                if (userOrgId.Value != organizationId)
+                {
+                    return false;
+                }
+
+                // Si se proporciona el ID de empresa afiliada, verificar asignación
+                if (affiliatedCompanyId.HasValue)
+                {
+                    var user = await _userManager.FindByIdAsync(currentUserId.Value.ToString());
+                    if (user == null)
+                    {
+                        return false;
+                    }
+
+                    var hasAccess = await _context.AffiliatedCompanies
+                        .AnyAsync(ac => ac.Id == affiliatedCompanyId.Value &&
+                                       ac.OrganizationId == organizationId &&
+                                       ac.AssignedInspectors.Any(i => i.Id == currentUserId.Value));
+
+                    return hasAccess;
+                }
+
+                // Si no se proporciona, verificar que la imagen pertenezca a una inspección del inspector
+                // Buscar la inspección que contiene esta imagen
+                var inspection = await _context.Inspections
+                    .FirstOrDefaultAsync(i => i.ImageUrl.Contains(fileName) && 
+                                            i.OrganizationId == organizationId &&
+                                            i.UserId == currentUserId.Value);
+
+                return inspection != null;
+            }
+
+            // Cliente: solo puede acceder a imágenes de su empresa
+            if (HasAnyRole(Roles.Cliente))
+            {
+                if (userOrgId.Value != organizationId)
+                {
+                    return false;
+                }
+
+                // Buscar la inspección y verificar que pertenezca a la empresa del cliente
+                // (Asumiendo que el cliente tiene una empresa asignada - esto puede necesitar ajuste según el modelo)
+                var inspection = await _context.Inspections
+                    .Include(i => i.AffiliatedCompany)
+                    .FirstOrDefaultAsync(i => i.ImageUrl.Contains(fileName) && 
+                                            i.OrganizationId == organizationId);
+
+                // Por ahora, si la inspección existe en la organización, el cliente puede verla
+                // Esto puede necesitar ajuste según la lógica de negocio específica
+                return inspection != null;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Sirve una imagen de forma segura.
-        /// Verifica que el usuario autenticado pertenezca a la organización propietaria del archivo.
+        /// Verifica permisos basados en roles y empresas afiliadas.
         /// </summary>
         /// <param name="organizationId">ID de la organización (parte de la ruta)</param>
         /// <param name="fileName">Nombre del archivo</param>
+        /// <param name="affiliatedCompanyId">ID de la empresa afiliada (opcional, para validación adicional)</param>
         /// <returns>El archivo de imagen si el usuario tiene permisos, o 403/404 si no</returns>
         [HttpGet("images/{organizationId:guid}/{fileName}")]
         [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public IActionResult GetImage(Guid organizationId, string fileName)
+        public async Task<IActionResult> GetImage(Guid organizationId, string fileName, [FromQuery] Guid? affiliatedCompanyId = null)
         {
-            // 1. Verificar que el usuario esté autenticado (ya está garantizado por [Authorize])
-            var userId = User.FindFirstValue("uid");
-            if (string.IsNullOrWhiteSpace(userId))
+            // 1. Verificar permisos basados en roles y empresas afiliadas
+            var hasAccess = await HasAccessToImageAsync(organizationId, fileName, affiliatedCompanyId);
+            if (!hasAccess)
             {
-                _logger.LogWarning("Intento de acceso a imagen sin userId en el token. OrganizationId: {OrgId}, FileName: {FileName}", 
-                    organizationId, fileName);
-                return Unauthorized("El token no contiene información de usuario válida.");
-            }
-
-            // 2. Verificar que el usuario pertenezca a la organización propietaria del archivo
-            var userOrgId = GetOrganizationIdFromClaims();
-            if (!userOrgId.HasValue)
-            {
-                _logger.LogWarning("Intento de acceso a imagen sin org_id en el token. UserId: {UserId}, RequestedOrgId: {OrgId}, FileName: {FileName}", 
-                    userId, organizationId, fileName);
-                return StatusCode(StatusCodes.Status403Forbidden, 
-                    "No se pudo verificar la organización del usuario. Acceso denegado.");
-            }
-
-            if (userOrgId.Value != organizationId)
-            {
+                var currentUserId = GetCurrentUserId();
                 _logger.LogWarning(
-                    "Intento de acceso no autorizado a imagen de otra organización. " +
-                    "UserId: {UserId}, UserOrgId: {UserOrgId}, RequestedOrgId: {OrgId}, FileName: {FileName}", 
-                    userId, userOrgId.Value, organizationId, fileName);
+                    "Intento de acceso no autorizado a imagen. " +
+                    "UserId: {UserId}, OrgId: {OrgId}, FileName: {FileName}, AffiliatedCompanyId: {CompanyId}", 
+                    currentUserId, organizationId, fileName, affiliatedCompanyId);
                 return StatusCode(StatusCodes.Status403Forbidden, 
-                    "No tienes permiso para acceder a archivos de esta organización.");
+                    "No tienes permiso para acceder a esta imagen.");
             }
 
-            // 3. Construir la ruta física del archivo
-            // Usar la misma lógica que LocalFileStorage para construir la ruta
-            // Si WebRootPath es null, usar ContentRootPath, pero si ContentRootPath está en bin/Debug,
-            // navegar hacia arriba hasta encontrar la carpeta del proyecto
-            var basePath = _environment.WebRootPath ?? _environment.ContentRootPath;
-            
-            // Si ContentRootPath está en bin/Debug/net9.0, navegar hacia arriba
-            if (basePath.Contains("bin" + Path.DirectorySeparatorChar + "Debug") || 
-                basePath.Contains("bin" + Path.DirectorySeparatorChar + "Release"))
-            {
-                // Navegar hacia arriba desde bin/Debug/net9.0 hasta la raíz del proyecto Api
-                var directory = new DirectoryInfo(basePath);
-                while (directory != null && directory.Name != "Api" && directory.Parent != null)
-                {
-                    directory = directory.Parent;
-                }
-                if (directory != null && directory.Name == "Api")
-                {
-                    basePath = directory.FullName;
-                }
-            }
-            
-            var uploadsPath = Path.Combine(basePath, "uploads");
-            var orgFolder = Path.Combine(uploadsPath, organizationId.ToString());
+            // 3. Construir la ruta física del archivo usando la misma lógica que LocalFileStorage
+            var basePath = GetStorageBasePath();
+            var orgFolder = Path.Combine(basePath, organizationId.ToString());
             var filePath = Path.Combine(orgFolder, fileName);
 
             // Sanitizar el nombre del archivo para prevenir path traversal attacks
             var sanitizedPath = Path.GetFullPath(filePath);
             var sanitizedBasePath = Path.GetFullPath(orgFolder);
             
+            var userId = GetCurrentUserId();
+            
             // Logging para diagnóstico
             _logger.LogInformation(
-                "Buscando imagen. BasePath: {BasePath}, UploadsPath: {UploadsPath}, OrgFolder: {OrgFolder}, FilePath: {FilePath}, SanitizedPath: {SanitizedPath}",
-                basePath, uploadsPath, orgFolder, filePath, sanitizedPath);
+                "Buscando imagen. BasePath: {BasePath}, OrgFolder: {OrgFolder}, FilePath: {FilePath}, SanitizedPath: {SanitizedPath}",
+                basePath, orgFolder, filePath, sanitizedPath);
             
             if (!sanitizedPath.StartsWith(sanitizedBasePath, StringComparison.OrdinalIgnoreCase))
             {
@@ -133,13 +222,12 @@ namespace VisioAnalytica.Api.Controllers
             {
                 // Verificar si la carpeta existe
                 var folderExists = Directory.Exists(orgFolder);
-                var uploadsExists = Directory.Exists(uploadsPath);
                 
                 _logger.LogWarning(
                     "Intento de acceso a imagen inexistente. " +
                     "UserId: {UserId}, OrgId: {OrgId}, FileName: {FileName}, Path: {Path}, " +
-                    "FolderExists: {FolderExists}, UploadsExists: {UploadsExists}, BasePath: {BasePath}", 
-                    userId, organizationId, fileName, sanitizedPath, folderExists, uploadsExists, basePath);
+                    "FolderExists: {FolderExists}, BasePath: {BasePath}", 
+                    userId, organizationId, fileName, sanitizedPath, folderExists, basePath);
                 return NotFound($"La imagen solicitada no existe. Ruta buscada: {sanitizedPath}");
             }
 
@@ -152,6 +240,132 @@ namespace VisioAnalytica.Api.Controllers
                 userId, organizationId, fileName);
 
             return PhysicalFile(sanitizedPath, contentType, fileName);
+        }
+
+        /// <summary>
+        /// Elimina una imagen de forma segura.
+        /// Solo Admin y SuperAdmin pueden eliminar imágenes.
+        /// </summary>
+        /// <param name="organizationId">ID de la organización</param>
+        /// <param name="fileName">Nombre del archivo</param>
+        /// <returns>200 si se eliminó correctamente, 403/404 si no</returns>
+        [HttpDelete("images/{organizationId:guid}/{fileName}")]
+        [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.Admin}")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> DeleteImage(Guid organizationId, string fileName)
+        {
+            var currentUserId = GetCurrentUserId();
+            if (!currentUserId.HasValue)
+            {
+                return Unauthorized("Usuario no autenticado.");
+            }
+
+            var userOrgId = GetOrganizationIdFromClaims();
+            if (!userOrgId.HasValue)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, 
+                    "No se pudo verificar la organización del usuario.");
+            }
+
+            // SuperAdmin puede eliminar de cualquier organización
+            // Admin solo puede eliminar de su organización
+            if (!HasAnyRole(Roles.SuperAdmin) && userOrgId.Value != organizationId)
+            {
+                _logger.LogWarning(
+                    "Intento de eliminación no autorizada. " +
+                    "UserId: {UserId}, UserOrgId: {UserOrgId}, RequestedOrgId: {OrgId}, FileName: {FileName}", 
+                    currentUserId, userOrgId.Value, organizationId, fileName);
+                return StatusCode(StatusCodes.Status403Forbidden, 
+                    "No tienes permiso para eliminar imágenes de esta organización.");
+            }
+
+            // Construir la ruta del archivo usando la misma lógica que LocalFileStorage
+            var basePath = GetStorageBasePath();
+            var orgFolder = Path.Combine(basePath, organizationId.ToString());
+            var filePath = Path.Combine(orgFolder, fileName);
+
+            var sanitizedPath = Path.GetFullPath(filePath);
+            var sanitizedBasePath = Path.GetFullPath(orgFolder);
+            
+            if (!sanitizedPath.StartsWith(sanitizedBasePath, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("Intento de path traversal en eliminación. FileName: {FileName}", fileName);
+                return BadRequest("Nombre de archivo inválido.");
+            }
+
+            if (!System.IO.File.Exists(sanitizedPath))
+            {
+                return NotFound("La imagen no existe.");
+            }
+
+            try
+            {
+                System.IO.File.Delete(sanitizedPath);
+                _logger.LogInformation(
+                    "Imagen eliminada correctamente. UserId: {UserId}, OrgId: {OrgId}, FileName: {FileName}", 
+                    currentUserId, organizationId, fileName);
+                
+                return Ok(new { message = "Imagen eliminada correctamente." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al eliminar imagen. FileName: {FileName}", fileName);
+                return StatusCode(500, "Error al eliminar la imagen.");
+            }
+        }
+
+        /// <summary>
+        /// Obtiene la ruta base de almacenamiento usando la misma lógica que LocalFileStorage.
+        /// </summary>
+        private string GetStorageBasePath()
+        {
+            // Obtener ruta base configurada
+            var configuredBasePath = _configuration["FileStorage:BasePath"];
+            
+            if (!string.IsNullOrWhiteSpace(configuredBasePath))
+            {
+                // Usar ruta configurada (puede ser absoluta o relativa)
+                if (Path.IsPathRooted(configuredBasePath))
+                {
+                    return configuredBasePath;
+                }
+                else
+                {
+                    // Ruta relativa desde ContentRootPath
+                    return Path.Combine(_environment.ContentRootPath, configuredBasePath);
+                }
+            }
+            else
+            {
+                // Ruta por defecto: fuera del proyecto en Storage/Images
+                var contentRoot = _environment.ContentRootPath;
+                
+                // Si ContentRootPath está en bin/Debug, navegar hacia arriba
+                if (contentRoot.Contains("bin" + Path.DirectorySeparatorChar + "Debug") || 
+                    contentRoot.Contains("bin" + Path.DirectorySeparatorChar + "Release"))
+                {
+                    var directory = new DirectoryInfo(contentRoot);
+                    while (directory != null && directory.Name != "Api" && directory.Parent != null)
+                    {
+                        directory = directory.Parent;
+                    }
+                    if (directory != null && directory.Name == "Api")
+                    {
+                        contentRoot = directory.Parent?.FullName ?? contentRoot;
+                    }
+                }
+                else
+                {
+                    // Si no está en bin/Debug, navegar al directorio padre (raíz del repositorio)
+                    contentRoot = Directory.GetParent(contentRoot)?.FullName ?? contentRoot;
+                }
+                
+                // Crear ruta: {raiz_repositorio}/Storage/Images
+                return Path.Combine(contentRoot, "Storage", "Images");
+            }
         }
 
         /// <summary>

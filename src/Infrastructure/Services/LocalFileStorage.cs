@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
@@ -15,39 +16,78 @@ namespace VisioAnalytica.Infrastructure.Services
         private readonly string _uploadsPath;
         private readonly ILogger<LocalFileStorage> _logger;
         private readonly IWebHostEnvironment _environment;
+        private readonly IConfiguration _configuration;
 
-        public LocalFileStorage(IWebHostEnvironment environment, ILogger<LocalFileStorage> logger)
+        public LocalFileStorage(
+            IWebHostEnvironment environment, 
+            ILogger<LocalFileStorage> logger,
+            IConfiguration configuration)
         {
             _environment = environment ?? throw new ArgumentNullException(nameof(environment));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             
-            // Definimos la ruta base: wwwroot/uploads o ContentRootPath/uploads
-            // Si ContentRootPath está en bin/Debug, navegar hacia arriba hasta encontrar la carpeta del proyecto
-            var basePath = _environment.WebRootPath ?? _environment.ContentRootPath;
+            // Obtener ruta base configurada
+            var configuredBasePath = _configuration["FileStorage:BasePath"];
+            var useRelativePath = _configuration.GetValue<bool>("FileStorage:UseRelativePath", true);
             
-            // Si ContentRootPath está en bin/Debug/net9.0, navegar hacia arriba
-            if (basePath.Contains("bin" + Path.DirectorySeparatorChar + "Debug") || 
-                basePath.Contains("bin" + Path.DirectorySeparatorChar + "Release"))
+            string basePath;
+            
+            if (!string.IsNullOrWhiteSpace(configuredBasePath))
             {
-                // Navegar hacia arriba desde bin/Debug/net9.0 hasta la raíz del proyecto Api
-                var directory = new DirectoryInfo(basePath);
-                while (directory != null && directory.Name != "Api" && directory.Parent != null)
+                // Usar ruta configurada (puede ser absoluta o relativa)
+                if (Path.IsPathRooted(configuredBasePath))
                 {
-                    directory = directory.Parent;
+                    basePath = configuredBasePath;
                 }
-                if (directory != null && directory.Name == "Api")
+                else
                 {
-                    basePath = directory.FullName;
+                    // Ruta relativa desde ContentRootPath
+                    basePath = Path.Combine(_environment.ContentRootPath, configuredBasePath);
                 }
             }
+            else
+            {
+                // Ruta por defecto: fuera del proyecto en Storage/Images
+                // Navegar desde ContentRootPath hasta la raíz del repositorio
+                var contentRoot = _environment.ContentRootPath;
+                
+                // Si ContentRootPath está en bin/Debug, navegar hacia arriba
+                if (contentRoot.Contains("bin" + Path.DirectorySeparatorChar + "Debug") || 
+                    contentRoot.Contains("bin" + Path.DirectorySeparatorChar + "Release"))
+                {
+                    var directory = new DirectoryInfo(contentRoot);
+                    while (directory != null && directory.Name != "Api" && directory.Parent != null)
+                    {
+                        directory = directory.Parent;
+                    }
+                    if (directory != null && directory.Name == "Api")
+                    {
+                        contentRoot = directory.Parent?.FullName ?? contentRoot;
+                    }
+                }
+                else
+                {
+                    // Si no está en bin/Debug, asumir que ContentRootPath es la raíz del proyecto Api
+                    // Navegar al directorio padre (raíz del repositorio)
+                    contentRoot = Directory.GetParent(contentRoot)?.FullName ?? contentRoot;
+                }
+                
+                // Crear ruta: {raiz_repositorio}/Storage/Images
+                basePath = Path.Combine(contentRoot, "Storage", "Images");
+            }
             
-            _uploadsPath = Path.Combine(basePath, "uploads");
+            _uploadsPath = basePath;
             
             // Aseguramos que la carpeta exista
             if (!Directory.Exists(_uploadsPath))
             {
                 Directory.CreateDirectory(_uploadsPath);
-                _logger.LogInformation("Carpeta de uploads creada en: {UploadsPath}", _uploadsPath);
+                _logger.LogInformation("Carpeta de almacenamiento de imágenes creada en: {UploadsPath}", _uploadsPath);
+            }
+            else
+            {
+                _logger.LogInformation("Usando carpeta de almacenamiento existente: {UploadsPath}", _uploadsPath);
             }
         }
 
@@ -116,24 +156,45 @@ namespace VisioAnalytica.Infrastructure.Services
         {
             try
             {
-                // Convertir URL relativa a ruta física
-                var basePath = _environment.WebRootPath ?? _environment.ContentRootPath;
-                var physicalPath = imageUrl.StartsWith("/")
-                    ? Path.Combine(basePath, imageUrl.TrimStart('/'))
-                    : imageUrl;
-
-                // Reemplazar '/' por separador de directorio del sistema
-                physicalPath = physicalPath.Replace("/", Path.DirectorySeparatorChar.ToString());
-
-                if (File.Exists(physicalPath))
+                // Si la URL es del formato /api/v1/file/images/{orgId}/{fileName}
+                // Extraer organizationId y fileName
+                if (imageUrl.StartsWith("/api/v1/file/images/"))
                 {
-                    File.Delete(physicalPath);
-                    _logger.LogInformation("Imagen eliminada: {FilePath}", physicalPath);
-                    return await Task.FromResult(true);
+                    var parts = imageUrl.Replace("/api/v1/file/images/", "").Split('/');
+                    if (parts.Length >= 2 && Guid.TryParse(parts[0], out var orgId))
+                    {
+                        var fileName = parts[1];
+                        var orgFolder = Path.Combine(_uploadsPath, orgId.ToString());
+                        var filePath = Path.Combine(orgFolder, fileName);
+                        
+                        if (File.Exists(filePath))
+                        {
+                            File.Delete(filePath);
+                            _logger.LogInformation("Imagen eliminada: {FilePath}", filePath);
+                            return true;
+                        }
+                    }
+                }
+                else
+                {
+                    // Compatibilidad con rutas antiguas
+                    var basePath = _environment.WebRootPath ?? _environment.ContentRootPath;
+                    var physicalPath = imageUrl.StartsWith("/")
+                        ? Path.Combine(basePath, imageUrl.TrimStart('/'))
+                        : imageUrl;
+
+                    physicalPath = physicalPath.Replace("/", Path.DirectorySeparatorChar.ToString());
+
+                    if (File.Exists(physicalPath))
+                    {
+                        File.Delete(physicalPath);
+                        _logger.LogInformation("Imagen eliminada: {FilePath}", physicalPath);
+                        return true;
+                    }
                 }
 
                 _logger.LogWarning("Imagen no encontrada para eliminar: {ImageUrl}", imageUrl);
-                return await Task.FromResult(false);
+                return false;
             }
             catch (Exception ex)
             {
