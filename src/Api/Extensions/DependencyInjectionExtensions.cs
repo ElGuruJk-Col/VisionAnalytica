@@ -1,8 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using System.Text;
 using VisioAnalytica.Core.Interfaces;
 using VisioAnalytica.Core.Models;
@@ -85,10 +86,29 @@ namespace VisioAnalytica.Api.Extensions
             // 4.F: ¡NUEVO REGISTRO! El Servicio de Consultas y Reportes (Capítulo 4)
             services.AddScoped<IReportService, ReportService>(); // << ¡AÑADIDO!
 
+            // 4.G: ¡NUEVO REGISTRO! El Servicio de Almacenamiento de Archivos (Capítulo 5)
+            services.AddScoped<IFileStorage, LocalFileStorage>(); // << ¡AÑADIDO!
+
+            // 4.H: ¡NUEVO REGISTRO! Servicios de Gestión de Usuarios y Empresas Afiliadas
+            services.AddScoped<IUserManagementService, UserManagementService>();
+            services.AddScoped<IAffiliatedCompanyService, AffiliatedCompanyService>();
+            services.AddScoped<RoleSeederService>();
+
 
             // --- 5. SERVICIOS ESTÁNDAR DE API ---
             services.AddControllers();
             services.AddEndpointsApiExplorer();
+            
+            // 5.A: Configurar CORS para desarrollo (permitir peticiones desde Swagger y apps móviles)
+            services.AddCors(options =>
+            {
+                options.AddPolicy("DevelopmentCors", policy =>
+                {
+                    policy.AllowAnyOrigin()
+                          .AllowAnyMethod()
+                          .AllowAnyHeader();
+                });
+            });
 
             // 5.B: Configuración de Swagger (con soporte para Auth)
             services.AddSwaggerGen(options =>
@@ -103,18 +123,17 @@ namespace VisioAnalytica.Api.Extensions
                     Type = SecuritySchemeType.ApiKey,
                     Scheme = "Bearer"
                 });
-                options.AddSecurityRequirement(new OpenApiSecurityRequirement {
+                options.AddSecurityRequirement(c =>
                 {
-                    new OpenApiSecurityScheme
+                    var requirement = new OpenApiSecurityRequirement
                     {
-                        Reference = new OpenApiReference
                         {
-                            Type = ReferenceType.SecurityScheme,
-                            Id = "Bearer"
+                            new OpenApiSecuritySchemeReference("Bearer"),
+                            new List<string>()
                         }
-                    },
-                    Array.Empty<string>()
-                }});
+                    };
+                    return requirement;
+                });
             });
 
             return services;

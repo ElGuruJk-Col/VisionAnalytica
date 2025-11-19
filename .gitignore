@@ -71,3 +71,7 @@ _ReSharper.*/
 
 # Directorios de pruebas de UI
 TestResults/
+
+# Directorios de imagenes subidas al servidor
+src/Api/uploads/
+src/Api/uploads/

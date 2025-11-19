@@ -31,6 +31,12 @@ namespace VisioAnalytica.Core.Models
     public record SstAnalysisResult
     {
         /// <summary>
+        /// La URL de la imagen analizada, una vez guardada en el almacenamiento.
+        /// </summary>
+        [JsonPropertyName("ImageUrl")]
+        public string? ImageUrl { get; init; }
+
+        /// <summary>
         /// La lista de hallazgos identificados por la IA.
         /// </summary>
         [JsonPropertyName("Hallazgos")]

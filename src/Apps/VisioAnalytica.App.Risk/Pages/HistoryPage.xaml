@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="VisioAnalytica.App.Risk.Pages.HistoryPage"
+             Title="Historial">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="15">
+            
+            <Label 
+                Text="Historial de Inspecciones"
+                FontSize="20"
+                FontAttributes="Bold"
+                Margin="0,0,0,10" />
+
+            <CollectionView 
+                x:Name="HistoryCollection"
+                ItemsSource="{Binding Inspections}">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Border 
+                            Stroke="Gray"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 10"
+                            Padding="15"
+                            Margin="0,0,0,10">
+                            <VerticalStackLayout Spacing="5">
+                                <Label 
+                                    Text="{Binding Date}"
+                                    FontSize="16"
+                                    FontAttributes="Bold" />
+                                <Label 
+                                    Text="{Binding FindingsCount, StringFormat='Hallazgos: {0}'}"
+                                    FontSize="14"
+                                    TextColor="Gray" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <Label 
+                x:Name="EmptyLabel"
+                Text="No hay inspecciones registradas."
+                FontSize="16"
+                TextColor="Gray"
+                HorizontalOptions="Center"
+                Margin="0,20,0,0"
+                IsVisible="False" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
+

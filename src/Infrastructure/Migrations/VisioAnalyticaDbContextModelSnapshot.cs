@@ -17,10 +17,25 @@ namespace VisioAnalytica.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.10")
+                .HasAnnotation("ProductVersion", "10.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("InspectorAffiliatedCompany", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AffiliatedCompanyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("UserId", "AffiliatedCompanyId");
+
+                    b.HasIndex("AffiliatedCompanyId");
+
+                    b.ToTable("InspectorAffiliatedCompanies", (string)null);
+                });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
                 {
@@ -153,6 +168,50 @@ namespace VisioAnalytica.Infrastructure.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("VisioAnalytica.Core.Models.AffiliatedCompany", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Address")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Phone")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TaxId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("Name", "OrganizationId")
+                        .IsUnique();
+
+                    b.ToTable("AffiliatedCompanies");
+                });
+
             modelBuilder.Entity("VisioAnalytica.Core.Models.Finding", b =>
                 {
                     b.Property<Guid>("Id")
@@ -195,7 +254,13 @@ namespace VisioAnalytica.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid>("AffiliatedCompanyId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("AnalysisDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("ImageUrl")
@@ -206,10 +271,20 @@ namespace VisioAnalytica.Infrastructure.Migrations
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AffiliatedCompanyId");
 
                     b.HasIndex("OrganizationId");
 
@@ -249,6 +324,12 @@ namespace VisioAnalytica.Infrastructure.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
@@ -260,6 +341,9 @@ namespace VisioAnalytica.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -269,6 +353,9 @@ namespace VisioAnalytica.Infrastructure.Migrations
 
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("bit");
 
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
@@ -280,6 +367,9 @@ namespace VisioAnalytica.Infrastructure.Migrations
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("PasswordChangedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("PasswordHash")
                         .HasColumnType("nvarchar(max)");
@@ -313,6 +403,21 @@ namespace VisioAnalytica.Infrastructure.Migrations
                     b.HasIndex("OrganizationId");
 
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("InspectorAffiliatedCompany", b =>
+                {
+                    b.HasOne("VisioAnalytica.Core.Models.AffiliatedCompany", null)
+                        .WithMany()
+                        .HasForeignKey("AffiliatedCompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("VisioAnalytica.Core.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
@@ -366,6 +471,17 @@ namespace VisioAnalytica.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("VisioAnalytica.Core.Models.AffiliatedCompany", b =>
+                {
+                    b.HasOne("VisioAnalytica.Core.Models.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+                });
+
             modelBuilder.Entity("VisioAnalytica.Core.Models.Finding", b =>
                 {
                     b.HasOne("VisioAnalytica.Core.Models.Inspection", "Inspection")
@@ -379,6 +495,12 @@ namespace VisioAnalytica.Infrastructure.Migrations
 
             modelBuilder.Entity("VisioAnalytica.Core.Models.Inspection", b =>
                 {
+                    b.HasOne("VisioAnalytica.Core.Models.AffiliatedCompany", "AffiliatedCompany")
+                        .WithMany("Inspections")
+                        .HasForeignKey("AffiliatedCompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("VisioAnalytica.Core.Models.Organization", "Organization")
                         .WithMany()
                         .HasForeignKey("OrganizationId")
@@ -390,6 +512,8 @@ namespace VisioAnalytica.Infrastructure.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("AffiliatedCompany");
 
                     b.Navigation("Organization");
 
@@ -405,6 +529,11 @@ namespace VisioAnalytica.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Organization");
+                });
+
+            modelBuilder.Entity("VisioAnalytica.Core.Models.AffiliatedCompany", b =>
+                {
+                    b.Navigation("Inspections");
                 });
 
             modelBuilder.Entity("VisioAnalytica.Core.Models.Inspection", b =>
