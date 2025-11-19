@@ -35,8 +35,17 @@ public partial class LoginPage : ContentPage
 
             if (response != null)
             {
-                // Login exitoso - navegar a la página principal
-                await Shell.Current.GoToAsync("//MainPage");
+                // Verificar si debe cambiar la contraseña
+                if (_authService.MustChangePassword)
+                {
+                    // Redirigir a la página de cambio de contraseña
+                    await Shell.Current.GoToAsync("//ChangePasswordPage");
+                }
+                else
+                {
+                    // Login exitoso - navegar a la página principal
+                    await Shell.Current.GoToAsync("//MainPage");
+                }
             }
             else
             {
@@ -61,6 +70,12 @@ public partial class LoginPage : ContentPage
     {
         // Navegar a la página de registro
         await Shell.Current.GoToAsync("RegisterPage");
+    }
+
+    private async void OnForgotPasswordClicked(object? sender, EventArgs e)
+    {
+        // Navegar a la página de recuperación de contraseña
+        await Shell.Current.GoToAsync("ForgotPasswordPage");
     }
 
     private void SetLoading(bool isLoading)

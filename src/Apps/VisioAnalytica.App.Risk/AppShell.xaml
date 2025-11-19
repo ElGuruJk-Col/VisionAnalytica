@@ -39,6 +39,18 @@
         ContentTemplate="{DataTemplate pages:RegisterPage}"
         Route="RegisterPage" />
 
+    <!-- Forgot Password Page -->
+    <ShellContent
+        Title="Recuperar Contraseña"
+        ContentTemplate="{DataTemplate pages:ForgotPasswordPage}"
+        Route="ForgotPasswordPage" />
+
+    <!-- Change Password Page -->
+    <ShellContent
+        Title="Cambiar Contraseña"
+        ContentTemplate="{DataTemplate pages:ChangePasswordPage}"
+        Route="ChangePasswordPage" />
+
     <!-- Results Page -->
     <ShellContent
         Title="Resultados"

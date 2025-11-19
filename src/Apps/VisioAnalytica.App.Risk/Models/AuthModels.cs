@@ -25,6 +25,32 @@ public record LoginRequest(
 public record AuthResponse(
     string Email,
     string FirstName,
-    string Token
+    string Token,
+    bool MustChangePassword = false,
+    IList<string>? Roles = null
+);
+
+/// <summary>
+/// Modelo para cambio de contraseña.
+/// </summary>
+public record ChangePasswordRequest(
+    string CurrentPassword,
+    string NewPassword
+);
+
+/// <summary>
+/// Modelo para solicitar recuperación de contraseña.
+/// </summary>
+public record ForgotPasswordRequest(
+    string Email
+);
+
+/// <summary>
+/// Modelo para restablecer contraseña con token.
+/// </summary>
+public record ResetPasswordRequest(
+    string Email,
+    string Token,
+    string NewPassword
 );
 
