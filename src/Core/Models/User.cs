@@ -38,6 +38,45 @@ namespace VisioAnalytica.Core.Models
         /// Un usuario pertenece a UNA organización.
         /// </summary>
         public virtual Organization Organization { get; set; } = null!;
+
+        // --- GESTIÓN DE CONTRASEÑAS Y ESTADO ---
+
+        /// <summary>
+        /// Indica si el usuario debe cambiar su contraseña en el próximo inicio de sesión.
+        /// Se establece en true cuando se crea con contraseña provisional.
+        /// </summary>
+        public bool MustChangePassword { get; set; } = false;
+
+        /// <summary>
+        /// Fecha y hora en que el usuario cambió su contraseña por última vez.
+        /// Null si nunca ha cambiado su contraseña.
+        /// </summary>
+        public DateTime? PasswordChangedAt { get; set; }
+
+        /// <summary>
+        /// Indica si el usuario está activo en el sistema.
+        /// Los usuarios inactivos no pueden iniciar sesión.
+        /// </summary>
+        public bool IsActive { get; set; } = true;
+
+        /// <summary>
+        /// Fecha y hora de creación del usuario.
+        /// </summary>
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        /// <summary>
+        /// ID del usuario que creó este usuario (puede ser SuperAdmin o Admin).
+        /// Null si fue creado por el sistema.
+        /// </summary>
+        public Guid? CreatedBy { get; set; }
+
+        // --- RELACIÓN CON EMPRESAS AFILIADAS (Solo para Inspectores) ---
+
+        /// <summary>
+        /// Empresas afiliadas asignadas a este inspector.
+        /// Relación Many-to-Many a través de InspectorAffiliatedCompany.
+        /// </summary>
+        public virtual ICollection<AffiliatedCompany> AssignedCompanies { get; set; } = new HashSet<AffiliatedCompany>();
     }
 }
 

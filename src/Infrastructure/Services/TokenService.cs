@@ -46,7 +46,7 @@ namespace VisioAnalytica.Infrastructure.Services
         /// Genera un string de token JWT para un usuario específico.
         /// (Este es el método exigido por la interfaz ITokenService).
         /// </summary>
-        public string CreateToken(User user)
+        public string CreateToken(User user, IList<string>? roles = null)
         {
             // 1. Definir los "Claims" (Datos dentro del Token)
             var claims = new List<Claim>
@@ -63,8 +63,20 @@ namespace VisioAnalytica.Infrastructure.Services
                 new("uid", user.Id.ToString()),
                 
                 // ¡VITAL! Guardamos el ID de la organización (Multi-Tenant)
-                new("org_id", user.OrganizationId.ToString())
+                new("org_id", user.OrganizationId.ToString()),
+                
+                // Guardamos si el usuario debe cambiar su contraseña
+                new("must_change_password", user.MustChangePassword.ToString().ToLower())
             };
+
+            // Agregar roles como claims (para autorización)
+            if (roles != null && roles.Count > 0)
+            {
+                foreach (var role in roles)
+                {
+                    claims.Add(new Claim(ClaimTypes.Role, role));
+                }
+            }
 
             // 2. Definir las "Credenciales de Firma"
             var creds = new SigningCredentials(_key, SecurityAlgorithms.HmacSha512Signature);

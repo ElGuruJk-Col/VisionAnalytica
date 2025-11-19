@@ -33,6 +33,29 @@ namespace VisioAnalytica.Core.Models
         [ForeignKey(nameof(OrganizationId))]
         public virtual Organization Organization { get; set; } = null!;
 
+        // Relación 1:N con la Empresa Afiliada auditada
+        [Required]
+        public Guid AffiliatedCompanyId { get; set; }
+        [ForeignKey(nameof(AffiliatedCompanyId))]
+        public virtual AffiliatedCompany AffiliatedCompany { get; set; } = null!;
+
+        /// <summary>
+        /// Estado de la inspección: Draft, PhotosCaptured, Analyzing, Completed, Failed
+        /// </summary>
+        [MaxLength(50)]
+        public string Status { get; set; } = "Draft"; // Draft, PhotosCaptured, Analyzing, Completed, Failed
+
+        /// <summary>
+        /// Fecha y hora en que se inició la inspección.
+        /// </summary>
+        public DateTime StartedAt { get; set; } = DateTime.UtcNow;
+
+        /// <summary>
+        /// Fecha y hora en que se completó el análisis.
+        /// Null si aún está en proceso.
+        /// </summary>
+        public DateTime? CompletedAt { get; set; }
+
         // Propiedad de Navegación: Una Inspección tiene MUCHOS Hallazgos
         public virtual ICollection<Finding> Findings { get; set; } = new HashSet<Finding>();
     }

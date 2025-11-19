@@ -20,6 +20,9 @@ namespace VisioAnalytica.Infrastructure.Data
         public DbSet<Inspection> Inspections { get; set; }
         public DbSet<Finding> Findings { get; set; }
 
+        // --- EMPRESAS AFILIADAS (Sistema de Roles) ---
+        public DbSet<AffiliatedCompany> AffiliatedCompanies { get; set; }
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder); // CRÍTICO: Aplica las reglas de Identity
@@ -62,6 +65,12 @@ namespace VisioAnalytica.Infrastructure.Data
                       .HasForeignKey(i => i.UserId)
                       .OnDelete(DeleteBehavior.Restrict); // Mantenemos la bitácora aunque el User se borre.
 
+                // Relación N:1 con AffiliatedCompany (la empresa auditada).
+                entity.HasOne(i => i.AffiliatedCompany)
+                      .WithMany(ac => ac.Inspections)
+                      .HasForeignKey(i => i.AffiliatedCompanyId)
+                      .OnDelete(DeleteBehavior.Restrict); // Mantenemos las inspecciones aunque la empresa se desactive.
+
                 // Relación 1:N con Finding (los hallazgos).
                 entity.HasMany(i => i.Findings)
                       .WithOne(f => f.Inspection)
@@ -69,6 +78,39 @@ namespace VisioAnalytica.Infrastructure.Data
                       // ¡CRÍTICO! Si se borra la Inspección, se borran sus detalles (Cascade).
                       .OnDelete(DeleteBehavior.Cascade);
             });
+
+            // 4. Reglas para la entidad AffiliatedCompany
+            builder.Entity<AffiliatedCompany>(entity =>
+            {
+                // Relación N:1 con Organization.
+                entity.HasOne(ac => ac.Organization)
+                      .WithMany()
+                      .HasForeignKey(ac => ac.OrganizationId)
+                      .OnDelete(DeleteBehavior.Restrict); // No borrar empresas si se borra la organización.
+
+                // Índice único por nombre dentro de la misma organización.
+                entity.HasIndex(ac => new { ac.Name, ac.OrganizationId }).IsUnique();
+            });
+
+            // 5. Relación Many-to-Many: Inspector (User) ↔ Empresas Afiliadas
+            builder.Entity<User>()
+                .HasMany(u => u.AssignedCompanies)
+                .WithMany(ac => ac.AssignedInspectors)
+                .UsingEntity<Dictionary<string, object>>(
+                    "InspectorAffiliatedCompany",
+                    j => j.HasOne<AffiliatedCompany>()
+                          .WithMany()
+                          .HasForeignKey("AffiliatedCompanyId")
+                          .OnDelete(DeleteBehavior.Cascade),
+                    j => j.HasOne<User>()
+                          .WithMany()
+                          .HasForeignKey("UserId")
+                          .OnDelete(DeleteBehavior.Cascade),
+                    j =>
+                    {
+                        j.HasKey("UserId", "AffiliatedCompanyId");
+                        j.ToTable("InspectorAffiliatedCompanies");
+                    });
         }
     }
 }
