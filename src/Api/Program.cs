@@ -134,5 +134,12 @@ app.UseAuthorization();  // ¿Tienes permiso? (Comprueba el token)
 // 4. Mapear los Controllers (el "recepcionista")
 app.MapControllers();
 
-// 5. ¡Arrancar!
+// 5. Inicializar roles del sistema (si no existen)
+using (var scope = app.Services.CreateScope())
+{
+    var roleSeeder = scope.ServiceProvider.GetRequiredService<VisioAnalytica.Infrastructure.Services.RoleSeederService>();
+    await roleSeeder.SeedRolesAsync();
+}
+
+// 6. ¡Arrancar!
 app.Run();
