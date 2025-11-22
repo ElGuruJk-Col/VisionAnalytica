@@ -68,7 +68,8 @@ namespace VisioAnalytica.Api.Controllers
             try
             {
                 // Obtener el ID del usuario desde el token JWT
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                // El TokenService genera el token con "uid" como claim personalizado
+                var userIdClaim = User.FindFirst("uid")?.Value;
                 if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
                 {
                     return Unauthorized("Token inválido o usuario no autenticado.");
@@ -111,7 +112,7 @@ namespace VisioAnalytica.Api.Controllers
                 await _authService.ForgotPasswordAsync(forgotPasswordDto);
                 return Ok(new { message = "Si el email existe, recibirás instrucciones para restablecer tu contraseña." });
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // Por seguridad, no revelamos errores específicos
                 return Ok(new { message = "Si el email existe, recibirás instrucciones para restablecer tu contraseña." });

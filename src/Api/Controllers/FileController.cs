@@ -45,10 +45,12 @@ namespace VisioAnalytica.Api.Controllers
 
         /// <summary>
         /// Obtiene el ID del usuario autenticado desde el token JWT.
+        /// El token usa el claim "uid" (según TokenService).
         /// </summary>
         private Guid? GetCurrentUserId()
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            // El TokenService genera el token con "uid" como claim personalizado
+            var userIdClaim = User.FindFirst("uid")?.Value;
             if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
             {
                 return null;
@@ -57,11 +59,13 @@ namespace VisioAnalytica.Api.Controllers
         }
 
         /// <summary>
-        /// Obtiene el GUID de la organización del token JWT (claim "organization_id").
+        /// Obtiene el GUID de la organización del token JWT (claim "org_id").
+        /// El token usa el claim "org_id" (según TokenService).
         /// </summary>
         private Guid? GetOrganizationIdFromClaims()
         {
-            var orgIdString = User.FindFirst("organization_id")?.Value;
+            // El TokenService genera el token con "org_id" como claim personalizado
+            var orgIdString = User.FindFirst("org_id")?.Value;
             if (string.IsNullOrWhiteSpace(orgIdString) || !Guid.TryParse(orgIdString, out var organizationId))
             {
                 return null;

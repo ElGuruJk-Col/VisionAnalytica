@@ -44,7 +44,7 @@
                 x:Name="CaptureButton"
                 Text="Tomar Foto"
                 Clicked="OnCaptureClicked"
-                BackgroundColor="#512BD4"
+                BackgroundColor="#483589"
                 TextColor="White"
                 CornerRadius="10"
                 HeightRequest="50" />

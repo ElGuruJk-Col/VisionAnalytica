@@ -1,18 +1,50 @@
+using System.Runtime.Versioning;
 using VisioAnalytica.App.Risk.Models;
 using VisioAnalytica.App.Risk.Services;
 
 namespace VisioAnalytica.App.Risk.Pages;
 
+[SupportedOSPlatform("android")]
+[SupportedOSPlatform("ios")]
+[SupportedOSPlatform("maccatalyst")]
+[SupportedOSPlatform("windows")]
 public partial class LoginPage : ContentPage
 {
-    private readonly IAuthService _authService;
+    private IAuthService? _authService;
 
-    public LoginPage(IAuthService authService)
+    // Constructor sin parámetros para ContentTemplate
+    public LoginPage() : this(null)
+    {
+    }
+
+    // Constructor con DI para navegación programática
+    public LoginPage(IAuthService? authService)
     {
         InitializeComponent();
         _authService = authService;
     }
 
+    // Obtener el servicio desde DI si no está disponible
+    private IAuthService GetAuthService()
+    {
+        if (_authService != null)
+            return _authService;
+
+        // Intentar obtener desde el contenedor de DI
+        var serviceProvider = Handler?.MauiContext?.Services;
+        if (serviceProvider != null)
+        {
+            _authService = serviceProvider.GetRequiredService<IAuthService>();
+            return _authService;
+        }
+
+        throw new InvalidOperationException("IAuthService no está disponible. La aplicación no se ha inicializado correctamente.");
+    }
+
+    [SupportedOSPlatform("android")]
+    [SupportedOSPlatform("ios")]
+    [SupportedOSPlatform("maccatalyst")]
+    [SupportedOSPlatform("windows")]
     private async void OnLoginClicked(object? sender, EventArgs e)
     {
         try
@@ -31,12 +63,18 @@ public partial class LoginPage : ContentPage
 
             // Intentar login
             var request = new LoginRequest(EmailEntry.Text.Trim(), PasswordEntry.Text);
-            var response = await _authService.LoginAsync(request);
+            var response = await GetAuthService().LoginAsync(request);
 
             if (response != null)
             {
+                // Actualizar el menú del Flyout después del login
+                if (Shell.Current is AppShell appShell)
+                {
+                    appShell.UpdateFlyoutMenu();
+                }
+                
                 // Verificar si debe cambiar la contraseña
-                if (_authService.MustChangePassword)
+                if (GetAuthService().MustChangePassword)
                 {
                     // Redirigir a la página de cambio de contraseña
                     await Shell.Current.GoToAsync("//ChangePasswordPage");
@@ -66,12 +104,20 @@ public partial class LoginPage : ContentPage
         }
     }
 
+    [SupportedOSPlatform("android")]
+    [SupportedOSPlatform("ios")]
+    [SupportedOSPlatform("maccatalyst")]
+    [SupportedOSPlatform("windows")]
     private async void OnRegisterClicked(object? sender, EventArgs e)
     {
         // Navegar a la página de registro
         await Shell.Current.GoToAsync("RegisterPage");
     }
 
+    [SupportedOSPlatform("android")]
+    [SupportedOSPlatform("ios")]
+    [SupportedOSPlatform("maccatalyst")]
+    [SupportedOSPlatform("windows")]
     private async void OnForgotPasswordClicked(object? sender, EventArgs e)
     {
         // Navegar a la página de recuperación de contraseña

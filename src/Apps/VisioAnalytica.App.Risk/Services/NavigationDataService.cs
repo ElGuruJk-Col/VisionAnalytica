@@ -9,10 +9,12 @@ namespace VisioAnalytica.App.Risk.Services;
 public class NavigationDataService : INavigationDataService
 {
     private AnalysisResult? _storedResult;
+    private byte[]? _capturedImageBytes;
 
-    public void SetAnalysisResult(AnalysisResult result)
+    public void SetAnalysisResult(AnalysisResult result, byte[]? capturedImageBytes = null)
     {
         _storedResult = result;
+        _capturedImageBytes = capturedImageBytes; // Guardar copia de los bytes de la imagen
     }
 
     public AnalysisResult? GetAndClearAnalysisResult()
@@ -20,6 +22,13 @@ public class NavigationDataService : INavigationDataService
         var result = _storedResult;
         _storedResult = null; // Limpiar después de obtener
         return result;
+    }
+
+    public byte[]? GetCapturedImageBytes()
+    {
+        var bytes = _capturedImageBytes;
+        _capturedImageBytes = null; // Limpiar después de obtener
+        return bytes;
     }
 }
 

@@ -80,11 +80,12 @@ if (hasHttpsPort || hasHttpsInUrls)
 {
     if (app.Environment.IsDevelopment())
     {
-        // En desarrollo: redirigir a HTTPS EXCEPTO para Swagger (que debe funcionar en ambos)
+        // En desarrollo: redirigir a HTTPS EXCEPTO para Swagger y endpoints de Auth (que deben funcionar en ambos)
         app.Use(async (context, next) =>
         {
-            // Permitir acceso HTTP a Swagger en desarrollo (para que funcione desde ambos esquemas)
-            if (context.Request.Path.StartsWithSegments("/swagger"))
+            // Permitir acceso HTTP a Swagger y endpoints de Auth en desarrollo (para que funcione desde ambos esquemas)
+            if (context.Request.Path.StartsWithSegments("/swagger") ||
+                context.Request.Path.StartsWithSegments("/api/Auth"))
             {
                 await next();
                 return;

@@ -11,11 +11,16 @@ public interface INavigationDataService
     /// <summary>
     /// Almacena temporalmente el resultado de un análisis.
     /// </summary>
-    void SetAnalysisResult(AnalysisResult result);
+    void SetAnalysisResult(AnalysisResult result, byte[]? capturedImageBytes = null);
 
     /// <summary>
     /// Obtiene y elimina el resultado de análisis almacenado.
     /// </summary>
     AnalysisResult? GetAndClearAnalysisResult();
+
+    /// <summary>
+    /// Obtiene los bytes de la imagen capturada (si están disponibles).
+    /// </summary>
+    byte[]? GetCapturedImageBytes();
 }
 

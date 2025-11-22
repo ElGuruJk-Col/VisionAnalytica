@@ -5,7 +5,61 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:VisioAnalytica.App.Risk"
     xmlns:pages="clr-namespace:VisioAnalytica.App.Risk.Pages"
-    Title="VisioAnalytica Risk">
+    Title="VisioAnalytica Risk"
+    FlyoutBehavior="Flyout">
+
+    <!-- Flyout Menu -->
+    <Shell.FlyoutContent>
+        <VerticalStackLayout Padding="20" Spacing="15">
+            <Label 
+                Text="VisioAnalytica Risk"
+                FontSize="24"
+                FontAttributes="Bold"
+                Margin="0,10,0,20" />
+            
+            <!-- Opciones cuando NO está autenticado -->
+            <VerticalStackLayout x:Name="UnauthenticatedMenu" Spacing="10">
+                <Button 
+                    Text="Iniciar Sesión"
+                    Clicked="OnLoginMenuClicked"
+                    BackgroundColor="Transparent"
+                    TextColor="#512BD4"
+                    HorizontalOptions="Start"
+                    Padding="0" />
+                <Button 
+                    Text="Registrarse"
+                    Clicked="OnRegisterMenuClicked"
+                    BackgroundColor="Transparent"
+                    TextColor="#512BD4"
+                    HorizontalOptions="Start"
+                    Padding="0" />
+                <Button 
+                    Text="Recuperar Contraseña"
+                    Clicked="OnForgotPasswordMenuClicked"
+                    BackgroundColor="Transparent"
+                    TextColor="#512BD4"
+                    HorizontalOptions="Start"
+                    Padding="0" />
+            </VerticalStackLayout>
+            
+            <!-- Opciones cuando SÍ está autenticado -->
+            <VerticalStackLayout x:Name="AuthenticatedMenu" Spacing="10" IsVisible="False">
+                <Label 
+                    x:Name="UserEmailLabel"
+                    Text="Usuario"
+                    FontSize="16"
+                    FontAttributes="Bold"
+                    Margin="0,0,0,10" />
+                <Button 
+                    Text="Cerrar Sesión"
+                    Clicked="OnLogoutMenuClicked"
+                    BackgroundColor="Transparent"
+                    TextColor="Red"
+                    HorizontalOptions="Start"
+                    Padding="0" />
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </Shell.FlyoutContent>
 
     <!-- Login Page (Initial) -->
     <ShellContent

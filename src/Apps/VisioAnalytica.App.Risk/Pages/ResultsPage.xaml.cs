@@ -33,52 +33,69 @@ public partial class ResultsPage : ContentPage
         
         // Obtener el resultado del servicio de navegación (almacenado en memoria)
         var result = _navigationDataService.GetAndClearAnalysisResult();
+        // Obtener también los bytes de la imagen capturada (si están disponibles)
+        var capturedImageBytes = _navigationDataService.GetCapturedImageBytes();
         
         if (result != null)
         {
             try
             {
-                        // Cargar imagen usando la ImageUrl del resultado (viene del servidor)
-                        // La ImageUrl ahora apunta al endpoint seguro del FileController
-                        if (!string.IsNullOrWhiteSpace(result.ImageUrl))
+                // Primero, intentar mostrar la imagen local si está disponible (más rápido y confiable)
+                if (capturedImageBytes != null && capturedImageBytes.Length > 0)
+                {
+                    try
+                    {
+                        AnalysisImage.Source = ImageSource.FromStream(() => new MemoryStream(capturedImageBytes));
+                        System.Diagnostics.Debug.WriteLine("Imagen mostrada desde bytes locales");
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error al mostrar imagen local: {ex.Message}");
+                    }
+                }
+                
+                // Luego, intentar cargar la imagen desde el servidor (para tener la versión final guardada)
+                // La ImageUrl ahora apunta al endpoint seguro del FileController
+                if (!string.IsNullOrWhiteSpace(result.ImageUrl))
+                {
+                    try
+                    {
+                        // Construir la URL completa usando la base URL de la API
+                        // La ImageUrl ya viene en formato /api/v1/file/images/{orgId}/{filename}
+                        // o en formato /uploads/{orgId}/{filename} que debemos convertir
+                        var imageUrl = result.ImageUrl;
+                        
+                        // Si la URL viene en formato /uploads/{orgId}/{filename}, convertirla al endpoint seguro
+                        if (imageUrl.StartsWith("/uploads/"))
                         {
-                            try
+                            // Extraer orgId y filename de /uploads/{orgId}/{filename}
+                            var parts = imageUrl.TrimStart('/').Split('/', 3);
+                            if (parts.Length >= 3 && Guid.TryParse(parts[1], out _))
                             {
-                                // Construir la URL completa usando la base URL de la API
-                                // La ImageUrl ya viene en formato /api/v1/file/images/{orgId}/{filename}
-                                // o en formato /uploads/{orgId}/{filename} que debemos convertir
-                                var imageUrl = result.ImageUrl;
-                                
-                                // Si la URL viene en formato /uploads/{orgId}/{filename}, convertirla al endpoint seguro
-                                if (imageUrl.StartsWith("/uploads/"))
-                                {
-                                    // Extraer orgId y filename de /uploads/{orgId}/{filename}
-                                    var parts = imageUrl.TrimStart('/').Split('/', 3);
-                                    if (parts.Length >= 3 && Guid.TryParse(parts[1], out _))
-                                    {
-                                        var orgId = parts[1];
-                                        var filename = parts[2];
-                                        imageUrl = $"/api/v1/file/images/{orgId}/{filename}";
-                                    }
-                                }
-                                
-                                var fullImageUrl = $"{_apiClient.BaseUrl}{imageUrl}";
-                                
-                                // Cargar la imagen usando HttpClient con autenticación
-                                await LoadImageSecurelyAsync(fullImageUrl);
-                            }
-                            catch (UriFormatException ex)
-                            {
-                                // Si hay error al crear el Uri, registrar pero continuar
-                                System.Diagnostics.Debug.WriteLine($"Error al crear Uri para imagen: {ex.Message}. ImageUrl: {result.ImageUrl}");
-                                // No mostrar la imagen si hay error, pero continuar mostrando los resultados
-                            }
-                            catch (Exception ex)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"Error al cargar imagen: {ex.Message}. ImageUrl: {result.ImageUrl}");
-                                // No mostrar la imagen si hay error, pero continuar mostrando los resultados
+                                var orgId = parts[1];
+                                var filename = parts[2];
+                                imageUrl = $"/api/v1/file/images/{orgId}/{filename}";
                             }
                         }
+                        
+                        var fullImageUrl = $"{_apiClient.BaseUrl}{imageUrl}";
+                        
+                        // Cargar la imagen usando HttpClient con autenticación
+                        // Esto reemplazará la imagen local si tiene éxito
+                        await LoadImageSecurelyAsync(fullImageUrl);
+                    }
+                    catch (UriFormatException ex)
+                    {
+                        // Si hay error al crear el Uri, registrar pero continuar
+                        System.Diagnostics.Debug.WriteLine($"Error al crear Uri para imagen: {ex.Message}. ImageUrl: {result.ImageUrl}");
+                        // La imagen local ya debería estar mostrándose
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error al cargar imagen desde servidor: {ex.Message}. ImageUrl: {result.ImageUrl}");
+                        // La imagen local ya debería estar mostrándose
+                    }
+                }
 
                 if (result.Hallazgos != null && result.Hallazgos.Count > 0)
                 {
@@ -137,7 +154,7 @@ public partial class ResultsPage : ContentPage
             // Verificar que el usuario esté autenticado
             if (!_authService.IsAuthenticated || string.IsNullOrWhiteSpace(_authService.CurrentToken))
             {
-                System.Diagnostics.Debug.WriteLine("Usuario no autenticado, no se puede cargar la imagen");
+                System.Diagnostics.Debug.WriteLine("Usuario no autenticado, no se puede cargar la imagen desde el servidor");
                 return;
             }
 
@@ -152,16 +169,20 @@ public partial class ResultsPage : ContentPage
             {
                 var imageBytes = await response.Content.ReadAsByteArrayAsync();
                 AnalysisImage.Source = ImageSource.FromStream(() => new MemoryStream(imageBytes));
+                System.Diagnostics.Debug.WriteLine($"Imagen cargada exitosamente desde el servidor: {imageUrl}");
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"Error al cargar imagen: {response.StatusCode} - {response.ReasonPhrase}");
+                var errorContent = await response.Content.ReadAsStringAsync();
+                System.Diagnostics.Debug.WriteLine($"Error al cargar imagen desde servidor: {response.StatusCode} - {response.ReasonPhrase}. URL: {imageUrl}. Error: {errorContent}");
+                // No cambiar la imagen si ya hay una mostrándose (la local)
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error al cargar imagen de forma segura: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Error al cargar imagen de forma segura: {ex.Message}. URL: {imageUrl}. StackTrace: {ex.StackTrace}");
             // No lanzar la excepción, solo registrar el error
+            // La imagen local debería seguir mostrándose si está disponible
         }
     }
 }

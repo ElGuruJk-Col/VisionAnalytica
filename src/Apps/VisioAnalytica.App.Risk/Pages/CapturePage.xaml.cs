@@ -1,7 +1,13 @@
+using System.Runtime.Versioning;
+using Microsoft.Maui.ApplicationModel;
 using VisioAnalytica.App.Risk.Services;
 
 namespace VisioAnalytica.App.Risk.Pages;
 
+[SupportedOSPlatform("android")]
+[SupportedOSPlatform("ios")]
+[SupportedOSPlatform("maccatalyst")]
+[SupportedOSPlatform("windows")]
 public partial class CapturePage : ContentPage
 {
     private readonly IAnalysisService _analysisService;
@@ -15,6 +21,10 @@ public partial class CapturePage : ContentPage
         _navigationDataService = navigationDataService;
     }
 
+    [SupportedOSPlatform("android")]
+    [SupportedOSPlatform("ios")]
+    [SupportedOSPlatform("maccatalyst")]
+    [SupportedOSPlatform("windows")]
     private async void OnCaptureClicked(object? sender, EventArgs e)
     {
         try
@@ -34,33 +44,15 @@ public partial class CapturePage : ContentPage
                 }
             }
 
-            // Verificar permisos de almacenamiento
+            // Verificar permisos de almacenamiento específicos de Android
 #if ANDROID
-            // Para Android 12 y anteriores: solicitar READ_EXTERNAL_STORAGE y WRITE_EXTERNAL_STORAGE
-            if (Android.OS.Build.VERSION.SdkInt < Android.OS.BuildVersionCodes.Tiramisu) // Android 12 y anteriores
+#pragma warning disable CA1416 // Call site is reachable on all platforms. 'CapturePage.RequestAndroidStoragePermissionsAsync()' is only supported on 'android'.
+            var storagePermissionGranted = await RequestAndroidStoragePermissionsAsync();
+#pragma warning restore CA1416
+            if (!storagePermissionGranted)
             {
-                var readStorageStatus = await Permissions.CheckStatusAsync<Permissions.StorageRead>();
-                if (readStorageStatus != PermissionStatus.Granted)
-                {
-                    readStorageStatus = await Permissions.RequestAsync<Permissions.StorageRead>();
-                }
-
-                var writeStorageStatus = await Permissions.CheckStatusAsync<Permissions.StorageWrite>();
-                if (writeStorageStatus != PermissionStatus.Granted)
-                {
-                    writeStorageStatus = await Permissions.RequestAsync<Permissions.StorageWrite>();
-                }
-
-                if (readStorageStatus != PermissionStatus.Granted || writeStorageStatus != PermissionStatus.Granted)
-                {
-                    await DisplayAlertAsync(
-                        "Permisos Requeridos", 
-                        "Se requieren permisos de almacenamiento para guardar fotos. Por favor, habilítalos en Configuración > Apps > VisioAnalytica Risk > Permisos.", 
-                        "OK");
-                    return;
-                }
+                return;
             }
-            // Para Android 13+: solo READ_MEDIA_IMAGES (se maneja automáticamente con MediaPicker)
 #endif
 
             // Tomar foto
@@ -94,6 +86,21 @@ public partial class CapturePage : ContentPage
                 StatusLabel.IsVisible = true;
             }
         }
+        catch (FeatureNotSupportedException)
+        {
+            await DisplayAlertAsync(
+                "Cámara no disponible", 
+                "La cámara no está disponible en este dispositivo o no está configurada correctamente. " +
+                "Por favor, verifica que tengas una cámara conectada y que los permisos estén habilitados.", 
+                "OK");
+        }
+        catch (PermissionException)
+        {
+            await DisplayAlertAsync(
+                "Permisos de cámara", 
+                "No se han otorgado los permisos de cámara. Por favor, habilita el permiso de cámara en la configuración de Windows.", 
+                "OK");
+        }
         catch (Exception ex)
         {
             await DisplayAlertAsync("Error", $"Error al capturar foto: {ex.Message}", "OK");
@@ -122,7 +129,8 @@ public partial class CapturePage : ContentPage
                 {
                     // Almacenar el resultado en el servicio de navegación (en memoria)
                     // Esto evita pasar datos grandes por URL
-                    _navigationDataService.SetAnalysisResult(result);
+                    // También guardamos los bytes de la imagen para mostrarla localmente como fallback
+                    _navigationDataService.SetAnalysisResult(result, _capturedImageBytes);
                     
                     // Navegar a la página de resultados sin parámetros
                     // La página de resultados recuperará los datos del servicio
@@ -163,5 +171,42 @@ public partial class CapturePage : ContentPage
         CaptureButton.IsEnabled = !isLoading;
         AnalyzeButton.IsEnabled = !isLoading && _capturedImageBytes != null;
     }
+
+#if ANDROID
+    /// <summary>
+    /// Solicita permisos de almacenamiento específicos para Android 12 y anteriores.
+    /// Para Android 13+ (Tiramisu), los permisos de medios se manejan automáticamente con MediaPicker.
+    /// </summary>
+    [SupportedOSPlatform("android")]
+    private async Task<bool> RequestAndroidStoragePermissionsAsync()
+    {
+        // Para Android 12 y anteriores: solicitar READ_EXTERNAL_STORAGE y WRITE_EXTERNAL_STORAGE
+        if (Android.OS.Build.VERSION.SdkInt < Android.OS.BuildVersionCodes.Tiramisu) // Android 12 y anteriores
+        {
+            var readStorageStatus = await Permissions.CheckStatusAsync<Permissions.StorageRead>();
+            if (readStorageStatus != PermissionStatus.Granted)
+            {
+                readStorageStatus = await Permissions.RequestAsync<Permissions.StorageRead>();
+            }
+
+            var writeStorageStatus = await Permissions.CheckStatusAsync<Permissions.StorageWrite>();
+            if (writeStorageStatus != PermissionStatus.Granted)
+            {
+                writeStorageStatus = await Permissions.RequestAsync<Permissions.StorageWrite>();
+            }
+
+            if (readStorageStatus != PermissionStatus.Granted || writeStorageStatus != PermissionStatus.Granted)
+            {
+                await DisplayAlertAsync(
+                    "Permisos Requeridos", 
+                    "Se requieren permisos de almacenamiento para guardar fotos. Por favor, habilítalos en Configuración > Apps > VisioAnalytica Risk > Permisos.", 
+                    "OK");
+                return false;
+            }
+        }
+        // Para Android 13+: solo READ_MEDIA_IMAGES (se maneja automáticamente con MediaPicker)
+        return true;
+    }
+#endif
 }
 

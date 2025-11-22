@@ -65,5 +65,13 @@ namespace VisioAnalytica.Infrastructure.Data
 
             return inspections;
         }
+
+        public async Task<Guid?> GetFirstActiveAffiliatedCompanyIdAsync(Guid organizationId)
+        {
+            return await _context.AffiliatedCompanies
+                .Where(ac => ac.IsActive && ac.OrganizationId == organizationId)
+                .Select(ac => ac.Id)
+                .FirstOrDefaultAsync();
+        }
     }
 }

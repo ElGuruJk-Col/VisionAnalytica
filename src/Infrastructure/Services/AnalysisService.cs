@@ -124,12 +124,21 @@ namespace VisioAnalytica.Infrastructure.Services
                 throw new InvalidOperationException("El identificador de usuario no tiene un formato válido (GUID). Fallo en la autenticación.");
             }
 
+            // Obtener la primera empresa afiliada activa para esta organización
+            var affiliatedCompanyId = await _analysisRepository.GetFirstActiveAffiliatedCompanyIdAsync(organizationId);
+            if (!affiliatedCompanyId.HasValue)
+            {
+                _logger.LogError("No se encontró ninguna empresa afiliada activa para la organización {OrganizationId}.", organizationId);
+                throw new InvalidOperationException($"No se encontró ninguna empresa afiliada activa para la organización {organizationId}.");
+            }
+
             var inspection = new Inspection
             {
                 // Usamos los GUIDs validados y pasados por argumento.
                 UserId = parsedUserId,
                 OrganizationId = organizationId,
                 ImageUrl = imageUrl, // URL real de la imagen guardada
+                AffiliatedCompanyId = affiliatedCompanyId.Value,
             };
 
             // 4.B: Mapear los Hallazgos (SstAnalysisResult) a las Entidades (Finding)
