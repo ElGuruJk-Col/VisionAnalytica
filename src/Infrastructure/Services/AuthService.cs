@@ -139,17 +139,30 @@ namespace VisioAnalytica.Infrastructure.Services
                 return true;
             }
 
-            // Generar token de recuperación de contraseña
-            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            // Generar una contraseña temporal segura
+            var temporaryPassword = GenerateTemporaryPassword();
             
-            // Construir URL de restablecimiento
-            var baseUrl = _configuration?["App:BaseUrl"] ?? "https://app.visioanalytica.com";
-            var resetUrl = $"{baseUrl}/reset-password";
+            // Generar token de recuperación para resetear la contraseña
+            var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+            
+            // Resetear la contraseña del usuario con la contraseña temporal
+            var resetResult = await _userManager.ResetPasswordAsync(user, resetToken, temporaryPassword);
+            if (!resetResult.Succeeded)
+            {
+                // Si falla el reset, loguear el error pero no revelar detalles
+                Console.WriteLine($"[WARNING] No se pudo resetear la contraseña para {user.Email}");
+                return true; // Por seguridad, siempre devolvemos éxito
+            }
 
-            // Enviar email con el token
+            // Marcar que el usuario debe cambiar su contraseña en el próximo login
+            user.MustChangePassword = true;
+            user.PasswordChangedAt = null; // Resetear la fecha de cambio
+            await _userManager.UpdateAsync(user);
+
+            // Enviar email con la contraseña temporal
             if (_emailService != null)
             {
-                var emailSent = await _emailService.SendPasswordResetEmailAsync(user.Email!, token, resetUrl);
+                var emailSent = await _emailService.SendPasswordResetEmailAsync(user.Email!, temporaryPassword, user.FirstName ?? "Usuario");
                 if (!emailSent)
                 {
                     // Log el error pero no fallar la operación (por seguridad)
@@ -158,12 +171,46 @@ namespace VisioAnalytica.Infrastructure.Services
             }
             else
             {
-                // En desarrollo, si no hay servicio de email configurado, loguear el token
-                Console.WriteLine($"[DEV ONLY] Token de recuperación para {user.Email}: {token}");
-                Console.WriteLine($"[DEV ONLY] URL: {resetUrl}?token={token}");
+                // En desarrollo, si no hay servicio de email configurado, loguear la contraseña temporal
+                Console.WriteLine($"[DEV ONLY] Contraseña temporal para {user.Email}: {temporaryPassword}");
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Genera una contraseña temporal segura.
+        /// </summary>
+        private static string GenerateTemporaryPassword()
+        {
+            // Generar una contraseña de 12 caracteres con mayúsculas, minúsculas y números
+            const string upperCase = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+            const string lowerCase = "abcdefghijkmnpqrstuvwxyz";
+            const string numbers = "23456789";
+            const string allChars = upperCase + lowerCase + numbers;
+            
+            var random = new Random();
+            var password = new char[12];
+            
+            // Asegurar al menos un carácter de cada tipo
+            password[0] = upperCase[random.Next(upperCase.Length)];
+            password[1] = lowerCase[random.Next(lowerCase.Length)];
+            password[2] = numbers[random.Next(numbers.Length)];
+            
+            // Llenar el resto con caracteres aleatorios
+            for (int i = 3; i < password.Length; i++)
+            {
+                password[i] = allChars[random.Next(allChars.Length)];
+            }
+            
+            // Mezclar los caracteres
+            for (int i = password.Length - 1; i > 0; i--)
+            {
+                int j = random.Next(i + 1);
+                (password[i], password[j]) = (password[j], password[i]);
+            }
+            
+            return new string(password);
         }
 
         public async Task<bool> ResetPasswordAsync(ResetPasswordDto resetPasswordDto)

@@ -137,6 +137,12 @@
         ContentTemplate="{DataTemplate pages:ChangePasswordPage}"
         Route="ChangePasswordPage" />
 
+    <!-- Reset Password Page -->
+    <ShellContent
+        Title="Restablecer Contraseña"
+        ContentTemplate="{DataTemplate pages:ResetPasswordPage}"
+        Route="ResetPasswordPage" />
+
     <!-- Results Page -->
     <ShellContent
         Title="Resultados"

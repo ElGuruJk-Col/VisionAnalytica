@@ -6,9 +6,9 @@ namespace VisioAnalytica.Infrastructure.Services
     public static class EmailTemplates
     {
         /// <summary>
-        /// Plantilla para email de recuperación de contraseña.
+        /// Plantilla para email de recuperación de contraseña con contraseña temporal.
         /// </summary>
-        public static string GetPasswordResetTemplate(string resetUrl, string resetToken)
+        public static string GetPasswordResetTemplate(string userName, string temporaryPassword)
         {
             return $@"
 <!DOCTYPE html>
@@ -58,15 +58,17 @@ namespace VisioAnalytica.Infrastructure.Services
         .button:hover {{
             background-color: #0056b3;
         }}
-        .token-box {{
+        .password-box {{
             background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
+            border: 2px solid #007bff;
             border-radius: 4px;
-            padding: 15px;
+            padding: 20px;
             margin: 20px 0;
-            font-family: 'Courier New', monospace;
-            word-break: break-all;
+            font-family: Courier New, monospace;
+            font-size: 18px;
+            font-weight: bold;
             text-align: center;
+            color: #007bff;
         }}
         .footer {{
             margin-top: 30px;
@@ -91,15 +93,26 @@ namespace VisioAnalytica.Infrastructure.Services
         </div>
         <div class='content'>
             <h2>Recuperación de Contraseña</h2>
-            <p>Hemos recibido una solicitud para restablecer tu contraseña.</p>
-            <p>Haz clic en el siguiente botón para restablecer tu contraseña:</p>
-            <div style='text-align: center;'>
-                <a href='{resetUrl}?token={resetToken}' class='button'>Restablecer Contraseña</a>
+            <p>Hola {userName},</p>
+            <p>Hemos recibido una solicitud para restablecer tu contraseña. Se ha generado una contraseña temporal que debes usar para iniciar sesión.</p>
+            <p><strong>Tu contraseña temporal es:</strong></p>
+            <div class='password-box'>
+                {temporaryPassword}
             </div>
-            <p>O copia y pega el siguiente enlace en tu navegador:</p>
-            <div class='token-box'>{resetUrl}?token={resetToken}</div>
+            <p>Para restablecer tu contraseña, sigue estos pasos:</p>
+            <ol style='margin: 20px 0; padding-left: 30px; line-height: 1.8;'>
+                <li>Abre la aplicación VisioAnalytica en tu dispositivo</li>
+                <li>Inicia sesión con tu email y la contraseña temporal mostrada arriba</li>
+                <li>El sistema te pedirá que cambies tu contraseña inmediatamente</li>
+                <li>Ingresa una nueva contraseña segura de tu elección</li>
+            </ol>
             <div class='warning'>
-                <strong>⚠️ Importante:</strong> Este enlace expirará en 24 horas. Si no solicitaste este cambio, ignora este email.
+                <strong>⚠️ Importante:</strong> 
+                <ul style='margin: 10px 0; padding-left: 20px;'>
+                    <li>Esta contraseña temporal es de un solo uso y expira después de iniciar sesión</li>
+                    <li>Debes cambiar tu contraseña inmediatamente después de iniciar sesión</li>
+                    <li>Si no solicitaste este cambio, contacta al administrador inmediatamente</li>
+                </ul>
             </div>
         </div>
         <div class='footer'>

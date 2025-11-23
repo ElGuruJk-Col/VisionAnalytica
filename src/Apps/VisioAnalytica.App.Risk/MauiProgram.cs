@@ -37,6 +37,7 @@ public static class MauiProgram
 		builder.Services.AddTransient<Pages.HistoryPage>();
 		builder.Services.AddTransient<Pages.ForgotPasswordPage>();
 		builder.Services.AddTransient<Pages.ChangePasswordPage>();
+		builder.Services.AddTransient<Pages.ResetPasswordPage>();
 		builder.Services.AddTransient<MainPage>();
 
 		// Registrar AppShell
@@ -53,6 +54,7 @@ public static class MauiProgram
 		Routing.RegisterRoute("RegisterPage", new DependencyInjectionRouteFactory<Pages.RegisterPage>(serviceProvider));
 		Routing.RegisterRoute("ForgotPasswordPage", new DependencyInjectionRouteFactory<Pages.ForgotPasswordPage>(serviceProvider));
 		Routing.RegisterRoute("ChangePasswordPage", new DependencyInjectionRouteFactory<Pages.ChangePasswordPage>(serviceProvider));
+		Routing.RegisterRoute("ResetPasswordPage", new DependencyInjectionRouteFactory<Pages.ResetPasswordPage>(serviceProvider));
 		Routing.RegisterRoute("CapturePage", new DependencyInjectionRouteFactory<Pages.CapturePage>(serviceProvider));
 		Routing.RegisterRoute("ResultsPage", new DependencyInjectionRouteFactory<Pages.ResultsPage>(serviceProvider));
 		Routing.RegisterRoute("HistoryPage", new DependencyInjectionRouteFactory<Pages.HistoryPage>(serviceProvider));

@@ -15,13 +15,13 @@ namespace VisioAnalytica.Core.Interfaces
         Task<bool> SendEmailAsync(EmailMessage message);
 
         /// <summary>
-        /// Envía un email de recuperación de contraseña.
+        /// Envía un email de recuperación de contraseña con contraseña temporal.
         /// </summary>
         /// <param name="email">Email del destinatario</param>
-        /// <param name="resetToken">Token de recuperación</param>
-        /// <param name="resetUrl">URL para restablecer la contraseña</param>
+        /// <param name="temporaryPassword">Contraseña temporal generada</param>
+        /// <param name="userName">Nombre del usuario</param>
         /// <returns>True si se envió correctamente</returns>
-        Task<bool> SendPasswordResetEmailAsync(string email, string resetToken, string resetUrl);
+        Task<bool> SendPasswordResetEmailAsync(string email, string temporaryPassword, string userName);
 
         /// <summary>
         /// Envía un email de bienvenida con contraseña temporal.

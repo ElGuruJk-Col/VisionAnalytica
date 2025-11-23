@@ -85,10 +85,10 @@ namespace VisioAnalytica.Infrastructure.Services
             }
         }
 
-        public async Task<bool> SendPasswordResetEmailAsync(string email, string resetToken, string resetUrl)
+        public async Task<bool> SendPasswordResetEmailAsync(string email, string temporaryPassword, string userName)
         {
             var subject = "Recuperación de Contraseña - VisioAnalytica";
-            var body = EmailTemplates.GetPasswordResetTemplate(resetUrl, resetToken);
+            var body = EmailTemplates.GetPasswordResetTemplate(userName, temporaryPassword);
 
             var message = new EmailMessage
             {
