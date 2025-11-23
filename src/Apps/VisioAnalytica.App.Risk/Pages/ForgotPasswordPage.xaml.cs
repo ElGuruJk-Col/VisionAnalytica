@@ -51,11 +51,14 @@ public partial class ForgotPasswordPage : ContentPage
         }
         catch (ApiException ex)
         {
-            ShowError($"Error: {ex.Message}");
+            // El ApiException ya contiene un mensaje amigable
+            ShowError(ex.Message);
         }
         catch (Exception ex)
         {
-            ShowError($"Error inesperado: {ex.Message}");
+            // Para errores inesperados, mostrar un mensaje genérico
+            ShowError("Ocurrió un error inesperado. Por favor, intenta nuevamente.");
+            System.Diagnostics.Debug.WriteLine($"Error inesperado en recuperación de contraseña: {ex}");
         }
         finally
         {

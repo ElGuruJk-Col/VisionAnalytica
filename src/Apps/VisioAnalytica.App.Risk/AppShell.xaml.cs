@@ -94,7 +94,7 @@ public partial class AppShell : Shell
 	}
 	
 	/// <summary>
-	/// Actualiza el menú del Flyout según el estado de autenticación.
+	/// Actualiza el menú del Flyout según el estado de autenticación y roles.
 	/// </summary>
 	public void UpdateFlyoutMenu()
 	{
@@ -116,6 +116,25 @@ public partial class AppShell : Shell
 			if (isAuthenticated && UserEmailLabel != null && _authService != null)
 			{
 				UserEmailLabel.Text = _authService.CurrentUserEmail ?? "Usuario";
+			}
+			
+			// Mostrar/ocultar opciones según roles
+			if (isAuthenticated && _authService != null)
+			{
+				var roles = _authService.CurrentUserRoles;
+				
+				// Cambiar contraseña está disponible para todos los usuarios autenticados
+				if (ChangePasswordMenuButton != null)
+				{
+					ChangePasswordMenuButton.IsVisible = true;
+				}
+				
+				// Opciones de administración solo para Admin y SuperAdmin
+				if (AdminMenu != null)
+				{
+					var isAdmin = roles.Contains("Admin") || roles.Contains("SuperAdmin");
+					AdminMenu.IsVisible = isAdmin;
+				}
 			}
 		}
 		
@@ -228,6 +247,12 @@ public partial class AppShell : Shell
 	private async void OnForgotPasswordMenuClicked(object? sender, EventArgs e)
 	{
 		await Shell.Current.GoToAsync("//ForgotPasswordPage");
+		FlyoutIsPresented = false;
+	}
+	
+	private async void OnChangePasswordMenuClicked(object? sender, EventArgs e)
+	{
+		await Shell.Current.GoToAsync("//ChangePasswordPage");
 		FlyoutIsPresented = false;
 	}
 	

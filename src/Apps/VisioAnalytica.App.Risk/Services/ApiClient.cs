@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace VisioAnalytica.App.Risk.Services;
 
@@ -84,10 +85,8 @@ public class ApiClient : IApiClient
             
             if (!response.IsSuccessStatusCode)
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                throw new ApiException(
-                    $"Error HTTP {(int)response.StatusCode} al realizar petición GET a {endpoint}. " +
-                    $"URL: {fullUrl}. Respuesta: {errorContent}");
+                var friendlyMessage = await ExtractFriendlyErrorMessageAsync(response);
+                throw new ApiException(friendlyMessage, (int)response.StatusCode);
             }
 
             var json = await response.Content.ReadAsStringAsync();
@@ -95,19 +94,16 @@ public class ApiClient : IApiClient
         }
         catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
         {
-            throw new ApiException($"Timeout al realizar petición GET a {endpoint}. Verifica que la API esté corriendo en {BaseUrl}", ex);
+            throw new ApiException($"La solicitud tardó demasiado. Verifica tu conexión a internet y que la API esté disponible.", ex);
         }
         catch (HttpRequestException ex)
         {
-            var fullUrl = $"{BaseUrl}{endpoint}";
             throw new ApiException(
-                $"Error de conexión al realizar petición GET a {endpoint}. " +
-                $"URL: {fullUrl}. " +
-                $"Verifica que la API esté corriendo y accesible. Error: {ex.Message}", ex);
+                $"No se pudo conectar con el servidor. Verifica tu conexión a internet y que la API esté disponible.", ex);
         }
         catch (JsonException ex)
         {
-            throw new ApiException($"Error al deserializar respuesta de {endpoint}: {ex.Message}", ex);
+            throw new ApiException($"Error al procesar la respuesta del servidor.", ex);
         }
     }
 
@@ -123,10 +119,8 @@ public class ApiClient : IApiClient
             
             if (!response.IsSuccessStatusCode)
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                throw new ApiException(
-                    $"Error HTTP {(int)response.StatusCode} al realizar petición POST a {endpoint}. " +
-                    $"URL: {fullUrl}. Respuesta: {errorContent}");
+                var friendlyMessage = await ExtractFriendlyErrorMessageAsync(response);
+                throw new ApiException(friendlyMessage, (int)response.StatusCode);
             }
 
             var responseJson = await response.Content.ReadAsStringAsync();
@@ -134,20 +128,83 @@ public class ApiClient : IApiClient
         }
         catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
         {
-            throw new ApiException($"Timeout al realizar petición POST a {endpoint}. Verifica que la API esté corriendo en {BaseUrl}", ex);
+            throw new ApiException($"La solicitud tardó demasiado. Verifica tu conexión a internet y que la API esté disponible.", ex);
         }
         catch (HttpRequestException ex)
         {
-            var fullUrl = $"{BaseUrl}{endpoint}";
             throw new ApiException(
-                $"Error de conexión al realizar petición POST a {endpoint}. " +
-                $"URL: {fullUrl}. " +
-                $"Verifica que la API esté corriendo y accesible. Error: {ex.Message}", ex);
+                $"No se pudo conectar con el servidor. Verifica tu conexión a internet y que la API esté disponible.", ex);
         }
         catch (JsonException ex)
         {
-            throw new ApiException($"Error al deserializar respuesta de {endpoint}: {ex.Message}", ex);
+            throw new ApiException($"Error al procesar la respuesta del servidor.", ex);
         }
+    }
+    
+    /// <summary>
+    /// Extrae un mensaje de error amigable de la respuesta HTTP.
+    /// Intenta parsear JSON con mensaje, si no, devuelve un mensaje genérico según el código de estado.
+    /// </summary>
+    private async Task<string> ExtractFriendlyErrorMessageAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            
+            // Intentar parsear como JSON para extraer el mensaje
+            if (!string.IsNullOrWhiteSpace(errorContent))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(errorContent);
+                    if (doc.RootElement.TryGetProperty("message", out var messageElement))
+                    {
+                        var message = messageElement.GetString();
+                        if (!string.IsNullOrWhiteSpace(message))
+                        {
+                            return message;
+                        }
+                    }
+                    // Si el JSON es un string directo
+                    if (doc.RootElement.ValueKind == JsonValueKind.String)
+                    {
+                        return doc.RootElement.GetString() ?? GetDefaultErrorMessage(response.StatusCode);
+                    }
+                }
+                catch
+                {
+                    // Si no es JSON válido, usar el contenido como está si es corto y legible
+                    if (errorContent.Length < 200 && !errorContent.Contains("Error HTTP"))
+                    {
+                        return errorContent;
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Si hay error al leer el contenido, usar mensaje por defecto
+        }
+        
+        // Mensaje por defecto según el código de estado
+        return GetDefaultErrorMessage(response.StatusCode);
+    }
+    
+    /// <summary>
+    /// Obtiene un mensaje de error amigable según el código de estado HTTP.
+    /// </summary>
+    private static string GetDefaultErrorMessage(System.Net.HttpStatusCode statusCode)
+    {
+        return statusCode switch
+        {
+            System.Net.HttpStatusCode.Unauthorized => "Email o contraseña inválidos.",
+            System.Net.HttpStatusCode.Forbidden => "No tienes permiso para realizar esta acción.",
+            System.Net.HttpStatusCode.NotFound => "El recurso solicitado no fue encontrado.",
+            System.Net.HttpStatusCode.BadRequest => "La solicitud no es válida. Verifica los datos ingresados.",
+            System.Net.HttpStatusCode.InternalServerError => "Error interno del servidor. Por favor, intenta más tarde.",
+            System.Net.HttpStatusCode.ServiceUnavailable => "El servicio no está disponible. Por favor, intenta más tarde.",
+            _ => "Ocurrió un error al procesar tu solicitud. Por favor, intenta nuevamente."
+        };
     }
 }
 
@@ -156,7 +213,20 @@ public class ApiClient : IApiClient
 /// </summary>
 public class ApiException : Exception
 {
+    public int? StatusCode { get; }
+    
     public ApiException(string message) : base(message) { }
+    
     public ApiException(string message, Exception innerException) : base(message, innerException) { }
+    
+    public ApiException(string message, int statusCode) : base(message)
+    {
+        StatusCode = statusCode;
+    }
+    
+    public ApiException(string message, int statusCode, Exception innerException) : base(message, innerException)
+    {
+        StatusCode = statusCode;
+    }
 }
 

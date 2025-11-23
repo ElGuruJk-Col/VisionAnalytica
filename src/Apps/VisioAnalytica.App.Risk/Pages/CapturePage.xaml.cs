@@ -152,11 +152,14 @@ public partial class CapturePage : ContentPage
         }
         catch (ApiException ex)
         {
-            await DisplayAlertAsync("Error", $"Error al analizar: {ex.Message}", "OK");
+            // El ApiException ya contiene un mensaje amigable
+            await DisplayAlertAsync("Error", ex.Message, "OK");
         }
         catch (Exception ex)
         {
-            await DisplayAlertAsync("Error", $"Error inesperado: {ex.Message}", "OK");
+            // Para errores inesperados, mostrar un mensaje genérico
+            await DisplayAlertAsync("Error", "Ocurrió un error inesperado al analizar la imagen. Por favor, intenta nuevamente.", "OK");
+            System.Diagnostics.Debug.WriteLine($"Error inesperado al analizar imagen: {ex}");
         }
         finally
         {
