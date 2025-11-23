@@ -24,5 +24,15 @@ public interface IApiClient
     /// Obtiene la URL base de la API.
     /// </summary>
     string BaseUrl { get; }
+
+    /// <summary>
+    /// Obtiene las empresas cliente asignadas al inspector autenticado.
+    /// </summary>
+    Task<IList<VisioAnalytica.Core.Models.Dtos.AffiliatedCompanyDto>> GetMyCompaniesAsync(bool includeInactive = false);
+
+    /// <summary>
+    /// Notifica al supervisor que el inspector no tiene empresas asignadas.
+    /// </summary>
+    Task<bool> NotifyInspectorWithoutCompaniesAsync();
 }
 

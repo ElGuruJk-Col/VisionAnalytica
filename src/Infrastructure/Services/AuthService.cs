@@ -30,11 +30,67 @@ namespace VisioAnalytica.Infrastructure.Services
             {
                 throw new UnauthorizedAccessException("Tu cuenta ha sido desactivada. Contacta al administrador.");
             }
+
+            // Verificar si la cuenta está bloqueada
+            if (user.LockedUntil.HasValue && user.LockedUntil.Value > DateTime.UtcNow)
+            {
+                var minutesRemaining = (int)Math.Ceiling((user.LockedUntil.Value - DateTime.UtcNow).TotalMinutes);
+                throw new UnauthorizedAccessException($"Tu cuenta está bloqueada temporalmente. Intenta nuevamente en {minutesRemaining} minuto(s). Si olvidaste tu contraseña, solicita una nueva contraseña.");
+            }
+
+            // Si el bloqueo expiró, resetear el estado
+            if (user.LockedUntil.HasValue && user.LockedUntil.Value <= DateTime.UtcNow)
+            {
+                user.LockedUntil = null;
+                user.FailedLoginAttempts = 0;
+                await _userManager.UpdateAsync(user);
+            }
             
             var isPasswordCorrect = await _userManager.CheckPasswordAsync(user, loginDto.Password);
             if (!isPasswordCorrect)
             {
-                throw new UnauthorizedAccessException("Email o contraseña inválidos.");
+                // Incrementar intentos fallidos
+                user.FailedLoginAttempts++;
+                
+                // Si alcanza 3 intentos fallidos, bloquear la cuenta
+                if (user.FailedLoginAttempts >= 3)
+                {
+                    // Bloquear por 30 minutos
+                    user.LockedUntil = DateTime.UtcNow.AddMinutes(30);
+                    await _userManager.UpdateAsync(user);
+                    
+                    // Enviar notificación de bloqueo por email
+                    if (_emailService != null)
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await _emailService.SendAccountLockedEmailAsync(user.Email!, user.FirstName ?? "Usuario");
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[WARNING] No se pudo enviar email de bloqueo a {user.Email}: {ex.Message}");
+                            }
+                        });
+                    }
+                    
+                    throw new UnauthorizedAccessException("Tu cuenta ha sido bloqueada temporalmente debido a múltiples intentos fallidos. Se ha enviado un email con instrucciones. El bloqueo durará 30 minutos.");
+                }
+                else
+                {
+                    await _userManager.UpdateAsync(user);
+                    var remainingAttempts = 3 - user.FailedLoginAttempts;
+                    throw new UnauthorizedAccessException($"Email o contraseña inválidos. Te quedan {remainingAttempts} intento(s) antes de que tu cuenta se bloquee.");
+                }
+            }
+
+            // Login exitoso: resetear intentos fallidos y desbloquear si estaba bloqueado
+            if (user.FailedLoginAttempts > 0 || user.LockedUntil.HasValue)
+            {
+                user.FailedLoginAttempts = 0;
+                user.LockedUntil = null;
+                await _userManager.UpdateAsync(user);
             }
 
             // Obtener los roles del usuario
@@ -110,7 +166,26 @@ namespace VisioAnalytica.Infrastructure.Services
                 throw new UnauthorizedAccessException("La cuenta de usuario está inactiva.");
             }
 
-            var result = await _userManager.ChangePasswordAsync(user, changePasswordDto.CurrentPassword, changePasswordDto.NewPassword);
+            IdentityResult result;
+            
+            // Si CurrentPassword es null o vacío, significa que viene de contraseña temporal (MustChangePassword = true)
+            if (string.IsNullOrWhiteSpace(changePasswordDto.CurrentPassword))
+            {
+                if (!user.MustChangePassword)
+                {
+                    throw new InvalidOperationException("Se requiere la contraseña actual para cambiar la contraseña.");
+                }
+                
+                // Cambiar contraseña sin verificar la actual (contraseña temporal)
+                var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+                result = await _userManager.ResetPasswordAsync(user, resetToken, changePasswordDto.NewPassword);
+            }
+            else
+            {
+                // Cambio de contraseña normal (requiere la contraseña actual)
+                result = await _userManager.ChangePasswordAsync(user, changePasswordDto.CurrentPassword, changePasswordDto.NewPassword);
+            }
+            
             if (!result.Succeeded)
             {
                 throw new InvalidOperationException($"Error al cambiar la contraseña: {string.Join(", ", result.Errors.Select(e => e.Description))}");
@@ -137,6 +212,14 @@ namespace VisioAnalytica.Infrastructure.Services
             {
                 // Por seguridad, no revelamos si la cuenta está inactiva
                 return true;
+            }
+
+            // Desbloquear la cuenta si estaba bloqueada (al solicitar nueva contraseña)
+            if (user.LockedUntil.HasValue)
+            {
+                user.LockedUntil = null;
+                user.FailedLoginAttempts = 0;
+                await _userManager.UpdateAsync(user);
             }
 
             // Generar una contraseña temporal segura

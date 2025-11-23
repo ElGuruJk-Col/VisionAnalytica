@@ -337,6 +337,9 @@ namespace VisioAnalytica.Infrastructure.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("bit");
 
+                    b.Property<int>("FailedLoginAttempts")
+                        .HasColumnType("int");
+
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -347,6 +350,9 @@ namespace VisioAnalytica.Infrastructure.Migrations
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasColumnType("datetime2");
 
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("bit");
@@ -383,6 +389,9 @@ namespace VisioAnalytica.Infrastructure.Migrations
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<Guid?>("SupervisorId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");
 
@@ -401,6 +410,8 @@ namespace VisioAnalytica.Infrastructure.Migrations
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
 
                     b.HasIndex("OrganizationId");
+
+                    b.HasIndex("SupervisorId");
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -528,7 +539,14 @@ namespace VisioAnalytica.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("VisioAnalytica.Core.Models.User", "Supervisor")
+                        .WithMany()
+                        .HasForeignKey("SupervisorId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.Navigation("Organization");
+
+                    b.Navigation("Supervisor");
                 });
 
             modelBuilder.Entity("VisioAnalytica.Core.Models.AffiliatedCompany", b =>

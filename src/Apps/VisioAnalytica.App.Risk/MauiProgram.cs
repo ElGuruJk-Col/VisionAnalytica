@@ -29,10 +29,18 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IAnalysisService, AnalysisService>();
 		builder.Services.AddSingleton<INavigationDataService, NavigationDataService>();
 
-		// Registrar páginas
-		builder.Services.AddTransient<Pages.LoginPage>();
+		// Registrar páginas (LoginPage necesita IApiClient también)
+		builder.Services.AddTransient<Pages.LoginPage>(sp => 
+			new Pages.LoginPage(
+				sp.GetRequiredService<IAuthService>(),
+				sp.GetRequiredService<IApiClient>()));
 		builder.Services.AddTransient<Pages.RegisterPage>();
-		builder.Services.AddTransient<Pages.CapturePage>();
+		builder.Services.AddTransient<Pages.CapturePage>(sp => 
+			new Pages.CapturePage(
+				sp.GetRequiredService<IAnalysisService>(),
+				sp.GetRequiredService<INavigationDataService>(),
+				sp.GetRequiredService<IApiClient>(),
+				sp.GetRequiredService<IAuthService>()));
 		builder.Services.AddTransient<Pages.ResultsPage>();
 		builder.Services.AddTransient<Pages.HistoryPage>();
 		builder.Services.AddTransient<Pages.ForgotPasswordPage>();

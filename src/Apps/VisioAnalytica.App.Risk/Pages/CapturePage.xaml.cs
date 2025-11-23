@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using Microsoft.Maui.ApplicationModel;
 using VisioAnalytica.App.Risk.Services;
+using VisioAnalytica.Core.Models.Dtos;
 
 namespace VisioAnalytica.App.Risk.Pages;
 
@@ -12,13 +13,82 @@ public partial class CapturePage : ContentPage
 {
     private readonly IAnalysisService _analysisService;
     private readonly INavigationDataService _navigationDataService;
+    private readonly IApiClient? _apiClient;
+    private readonly IAuthService? _authService;
     private byte[]? _capturedImageBytes;
+    private IList<AffiliatedCompanyDto>? _assignedCompanies;
+    private AffiliatedCompanyDto? _selectedCompany;
 
-    public CapturePage(IAnalysisService analysisService, INavigationDataService navigationDataService)
+    public CapturePage(IAnalysisService analysisService, INavigationDataService navigationDataService, IApiClient? apiClient = null, IAuthService? authService = null)
     {
         InitializeComponent();
         _analysisService = analysisService;
         _navigationDataService = navigationDataService;
+        _apiClient = apiClient;
+        _authService = authService;
+    }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        
+        // Verificar si es Inspector y cargar empresas asignadas
+        if (_authService != null && _apiClient != null)
+        {
+            var roles = _authService.CurrentUserRoles;
+            if (roles.Contains("Inspector"))
+            {
+                await LoadAssignedCompanies();
+            }
+            else
+            {
+                CompanyLabel.IsVisible = false;
+                CompanyPicker.IsVisible = false;
+            }
+        }
+    }
+
+    private async Task LoadAssignedCompanies()
+    {
+        if (_apiClient == null) return;
+
+        try
+        {
+            _assignedCompanies = await _apiClient.GetMyCompaniesAsync();
+            
+            if (_assignedCompanies != null && _assignedCompanies.Count > 0)
+            {
+                CompanyPicker.ItemsSource = _assignedCompanies.ToList();
+                CompanyLabel.IsVisible = true;
+                CompanyPicker.IsVisible = true;
+                
+                // Seleccionar primera empresa por defecto
+                if (_assignedCompanies.Count == 1)
+                {
+                    CompanyPicker.SelectedItem = _assignedCompanies[0];
+                    _selectedCompany = _assignedCompanies[0];
+                }
+            }
+            else
+            {
+                // No debería llegar aquí si la validación de login funciona
+                await DisplayAlertAsync("Error", "No tienes empresas asignadas.", "OK");
+                await Shell.Current.GoToAsync("//MainPage");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error al cargar empresas: {ex}");
+            await DisplayAlertAsync("Error", "No se pudieron cargar las empresas asignadas.", "OK");
+        }
+    }
+
+    private void OnCompanySelected(object? sender, EventArgs e)
+    {
+        if (CompanyPicker.SelectedItem is AffiliatedCompanyDto company)
+        {
+            _selectedCompany = company;
+        }
     }
 
     [SupportedOSPlatform("android")]
@@ -27,6 +97,20 @@ public partial class CapturePage : ContentPage
     [SupportedOSPlatform("windows")]
     private async void OnCaptureClicked(object? sender, EventArgs e)
     {
+        // Validar que haya seleccionado una empresa (si es Inspector)
+        if (_authService != null)
+        {
+            var roles = _authService.CurrentUserRoles;
+            if (roles.Contains("Inspector") && _selectedCompany == null)
+            {
+                await DisplayAlertAsync(
+                    "Empresa Requerida",
+                    "Debes seleccionar una empresa cliente antes de capturar una foto.",
+                    "OK");
+                return;
+            }
+        }
+
         try
         {
             // Verificar permisos de cámara
@@ -115,6 +199,20 @@ public partial class CapturePage : ContentPage
             return;
         }
 
+        // Validar empresa seleccionada (si es Inspector)
+        if (_authService != null)
+        {
+            var roles = _authService.CurrentUserRoles;
+            if (roles.Contains("Inspector") && _selectedCompany == null)
+            {
+                await DisplayAlertAsync(
+                    "Empresa Requerida",
+                    "Debes seleccionar una empresa cliente antes de analizar.",
+                    "OK");
+                return;
+            }
+        }
+
         try
         {
             SetLoading(true);
@@ -130,7 +228,9 @@ public partial class CapturePage : ContentPage
                     // Almacenar el resultado en el servicio de navegación (en memoria)
                     // Esto evita pasar datos grandes por URL
                     // También guardamos los bytes de la imagen para mostrarla localmente como fallback
-                    _navigationDataService.SetAnalysisResult(result, _capturedImageBytes);
+                    // Guardar también el AffiliatedCompanyId si está seleccionado (para Inspectores)
+                    var companyId = _selectedCompany?.Id;
+                    _navigationDataService.SetAnalysisResult(result, _capturedImageBytes, companyId);
                     
                     // Navegar a la página de resultados sin parámetros
                     // La página de resultados recuperará los datos del servicio

@@ -32,9 +32,10 @@ public record AuthResponse(
 
 /// <summary>
 /// Modelo para cambio de contraseña.
+/// CurrentPassword es opcional cuando MustChangePassword = true (contraseña temporal).
 /// </summary>
 public record ChangePasswordRequest(
-    string CurrentPassword,
+    string? CurrentPassword,
     string NewPassword
 );
 

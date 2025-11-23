@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using VisioAnalytica.Core.Models.Dtos;
 
 namespace VisioAnalytica.App.Risk.Services;
 
@@ -18,11 +19,12 @@ public class ApiClient : IApiClient
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         
-        // Configuración de JSON
+        // Configuración de JSON con opciones modernas
         _jsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
 
         // URL base - Detecta automáticamente según la plataforma
@@ -205,6 +207,33 @@ public class ApiClient : IApiClient
             System.Net.HttpStatusCode.ServiceUnavailable => "El servicio no está disponible. Por favor, intenta más tarde.",
             _ => "Ocurrió un error al procesar tu solicitud. Por favor, intenta nuevamente."
         };
+    }
+
+    /// <summary>
+    /// Obtiene las empresas cliente asignadas al inspector autenticado.
+    /// </summary>
+    public async Task<IList<AffiliatedCompanyDto>> GetMyCompaniesAsync(bool includeInactive = false)
+    {
+        var endpoint = $"/api/AffiliatedCompany/my-companies?includeInactive={includeInactive}";
+        var result = await GetAsync<IList<AffiliatedCompanyDto>>(endpoint);
+        return result ?? []; // Collection expression
+    }
+
+    /// <summary>
+    /// Notifica al supervisor que el inspector no tiene empresas asignadas.
+    /// </summary>
+    public async Task<bool> NotifyInspectorWithoutCompaniesAsync()
+    {
+        try
+        {
+            var endpoint = "/api/UserManagement/notify-inspector-without-companies";
+            var response = await PostAsync<object, object>(endpoint, new { });
+            return response != null;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }
 

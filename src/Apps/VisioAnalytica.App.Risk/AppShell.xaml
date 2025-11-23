@@ -32,7 +32,8 @@
                     BackgroundColor="Transparent"
                     TextColor="#512BD4"
                     HorizontalOptions="Start"
-                    Padding="0" />
+                    Padding="0"
+                    IsVisible="False" />
                 <Button 
                     Text="Recuperar Contraseña"
                     Clicked="OnForgotPasswordMenuClicked"

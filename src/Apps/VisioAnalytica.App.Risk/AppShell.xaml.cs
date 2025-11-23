@@ -27,6 +27,7 @@ public partial class AppShell : Shell
 		}
 		
 		// Ocultar TabBar y Flyout cuando estemos en páginas de autenticación
+		Navigating += OnNavigating;
 		Navigated += OnNavigated;
 		
 		// Asegurar que la página de Login sea la primera en mostrarse
@@ -78,6 +79,53 @@ public partial class AppShell : Shell
 		}
 	}
 
+	private void OnNavigating(object? sender, ShellNavigatingEventArgs e)
+	{
+		// Capturar la ruta anterior ANTES de navegar a ChangePasswordPage
+		var targetLocation = e.Target?.Location?.ToString() ?? "";
+		if (targetLocation.Contains("ChangePasswordPage"))
+		{
+			// Obtener la ruta actual (antes de navegar)
+			var currentLocation = Shell.Current?.CurrentState?.Location?.ToString() ?? "";
+			if (!string.IsNullOrEmpty(currentLocation) && !currentLocation.Contains("ChangePasswordPage"))
+			{
+				// Normalizar la ruta: si es MainPage (primera pestaña del TabBar), usar //MainPage
+				// El problema es que cuando estás en MainPage, la ruta puede ser "//MainPage" o el TabBar completo
+				// Verificamos si la ruta actual contiene MainPage específicamente
+				if (currentLocation.Contains("MainPage") && !currentLocation.Contains("HistoryPage") && !currentLocation.Contains("CapturePage"))
+				{
+					PreviousRoute = "//MainPage";
+				}
+				else if (currentLocation.Contains("HistoryPage"))
+				{
+					PreviousRoute = "//HistoryPage";
+				}
+				else if (currentLocation.Contains("CapturePage"))
+				{
+					PreviousRoute = "//CapturePage";
+				}
+				else if (currentLocation.Contains("MainPage"))
+				{
+					// Si contiene MainPage pero también otras páginas, verificar si MainPage es la primera
+					// En MAUI Shell TabBar, la primera pestaña (MainPage) puede no tener ruta explícita
+					// Si la ruta termina con MainPage o empieza con //MainPage, usar MainPage
+					if (currentLocation.EndsWith("MainPage") || currentLocation.StartsWith("//MainPage"))
+					{
+						PreviousRoute = "//MainPage";
+					}
+					else
+					{
+						PreviousRoute = currentLocation;
+					}
+				}
+				else
+				{
+					PreviousRoute = currentLocation;
+				}
+			}
+		}
+	}
+
 	private void OnNavigated(object? sender, ShellNavigatedEventArgs e)
 	{
 		// Ocultar TabBar y Flyout en páginas de autenticación
@@ -92,6 +140,11 @@ public partial class AppShell : Shell
 		// Actualizar el menú cuando navegamos
 		UpdateFlyoutMenu();
 	}
+	
+	/// <summary>
+	/// Ruta anterior guardada para navegación de regreso.
+	/// </summary>
+	public static string? PreviousRoute { get; private set; }
 	
 	/// <summary>
 	/// Actualiza el menú del Flyout según el estado de autenticación y roles.
@@ -149,8 +202,11 @@ public partial class AppShell : Shell
 	/// </summary>
 	private void UpdateAuthPagesVisibility(bool show)
 	{
-		// Lista de rutas de páginas de autenticación que queremos ocultar/mostrar
-		var authRoutes = new[] { "LoginPage", "RegisterPage", "ForgotPasswordPage" };
+		// Lista de rutas de páginas de autenticación que queremos ocultar/mostrar según estado
+		var authRoutes = new[] { "LoginPage", "ForgotPasswordPage" };
+		
+		// RegisterPage siempre oculta (solo para uso futuro desde web app)
+		var alwaysHiddenRoutes = new[] { "RegisterPage" };
 		
 		// Buscar y actualizar cada página de autenticación
 		foreach (var route in authRoutes)
@@ -178,6 +234,29 @@ public partial class AppShell : Shell
 			{
 				// Si hay algún error al buscar la página, simplemente continuar
 				// Esto evita que un error en una página afecte a las demás
+			}
+		}
+		
+		// Ocultar RegisterPage siempre
+		foreach (var route in alwaysHiddenRoutes)
+		{
+			try
+			{
+				foreach (var element in Items)
+				{
+					if (element is ShellItem shellItem)
+					{
+						UpdateShellContentInItem(shellItem, route, false);
+					}
+					else
+					{
+						UpdateShellContentRecursive(element, route, false);
+					}
+				}
+			}
+			catch
+			{
+				// Continuar si hay error
 			}
 		}
 	}

@@ -40,6 +40,24 @@ namespace VisioAnalytica.Core.Interfaces
         /// <param name="companyName">Nombre de la empresa auditada</param>
         /// <returns>True si se envió correctamente</returns>
         Task<bool> SendAnalysisCompleteEmailAsync(string email, Guid inspectionId, string companyName);
+
+        /// <summary>
+        /// Envía un email de notificación cuando una cuenta ha sido bloqueada.
+        /// </summary>
+        /// <param name="email">Email del destinatario</param>
+        /// <param name="userName">Nombre del usuario</param>
+        /// <returns>True si se envió correctamente</returns>
+        Task<bool> SendAccountLockedEmailAsync(string email, string userName);
+
+        /// <summary>
+        /// Envía un email de notificación al supervisor cuando un inspector no tiene empresas asignadas.
+        /// </summary>
+        /// <param name="supervisorEmail">Email del supervisor</param>
+        /// <param name="supervisorName">Nombre del supervisor</param>
+        /// <param name="inspectorEmail">Email del inspector</param>
+        /// <param name="inspectorName">Nombre completo del inspector</param>
+        /// <returns>True si se envió correctamente</returns>
+        Task<bool> SendInspectorWithoutCompaniesEmailAsync(string supervisorEmail, string supervisorName, string inspectorEmail, string inspectorName);
     }
 
     /// <summary>

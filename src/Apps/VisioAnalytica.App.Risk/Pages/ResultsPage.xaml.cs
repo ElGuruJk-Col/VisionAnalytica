@@ -11,6 +11,11 @@ public partial class ResultsPage : ContentPage
     private readonly INavigationDataService _navigationDataService;
     private readonly IAuthService _authService;
     public ObservableCollection<FindingViewModel> Findings { get; } = new();
+    
+    // Caché local para mantener los resultados cuando se navega a otras páginas
+    private AnalysisResult? _cachedResult;
+    private byte[]? _cachedImageBytes;
+    private ImageSource? _cachedImageSource;
 
     public ResultsPage(IApiClient apiClient, INavigationDataService navigationDataService, IAuthService authService)
     {
@@ -31,22 +36,53 @@ public partial class ResultsPage : ContentPage
     {
         Findings.Clear();
         
-        // Obtener el resultado del servicio de navegación (almacenado en memoria)
-        var result = _navigationDataService.GetAndClearAnalysisResult();
-        // Obtener también los bytes de la imagen capturada (si están disponibles)
-        var capturedImageBytes = _navigationDataService.GetCapturedImageBytes();
+        // Primero verificar si hay resultados en caché local (de esta instancia de la página)
+        AnalysisResult? result = _cachedResult;
+        byte[]? capturedImageBytes = _cachedImageBytes;
+        Guid? affiliatedCompanyId = null;
+        
+        // Si no hay resultados en caché local, obtenerlos del servicio de navegación
+        // El servicio es Singleton, por lo que los datos persisten entre navegaciones
+        if (result == null)
+        {
+            // Usar GetAnalysisResult() en lugar de GetAndClearAnalysisResult() para mantener los datos
+            result = _navigationDataService.GetAnalysisResult();
+            capturedImageBytes = _navigationDataService.GetCapturedImageBytes();
+            affiliatedCompanyId = _navigationDataService.GetAffiliatedCompanyId();
+            
+            // Si se obtuvieron resultados del servicio, guardarlos en caché local también
+            if (result != null)
+            {
+                _cachedResult = result;
+                _cachedImageBytes = capturedImageBytes;
+                _cachedImageSource = null; // Resetear la imagen en caché para recargarla
+            }
+        }
+        else
+        {
+            // Si hay caché local, también obtener el AffiliatedCompanyId del servicio
+            affiliatedCompanyId = _navigationDataService.GetAffiliatedCompanyId();
+        }
         
         if (result != null)
         {
             try
             {
-                // Primero, intentar mostrar la imagen local si está disponible (más rápido y confiable)
-                if (capturedImageBytes != null && capturedImageBytes.Length > 0)
+                // Primero, intentar mostrar la imagen desde caché si está disponible
+                if (_cachedImageSource != null)
+                {
+                    AnalysisImage.Source = _cachedImageSource;
+                    System.Diagnostics.Debug.WriteLine("Imagen mostrada desde caché");
+                }
+                // Si no hay imagen en caché, intentar mostrar desde bytes locales
+                else if (capturedImageBytes != null && capturedImageBytes.Length > 0)
                 {
                     try
                     {
-                        AnalysisImage.Source = ImageSource.FromStream(() => new MemoryStream(capturedImageBytes));
-                        System.Diagnostics.Debug.WriteLine("Imagen mostrada desde bytes locales");
+                        var imageSource = ImageSource.FromStream(() => new MemoryStream(capturedImageBytes));
+                        AnalysisImage.Source = imageSource;
+                        _cachedImageSource = imageSource; // Guardar en caché para futuras navegaciones
+                        System.Diagnostics.Debug.WriteLine("Imagen mostrada desde bytes locales y guardada en caché");
                     }
                     catch (Exception ex)
                     {
@@ -80,9 +116,21 @@ public partial class ResultsPage : ContentPage
                         
                         var fullImageUrl = $"{_apiClient.BaseUrl}{imageUrl}";
                         
+                        // Agregar AffiliatedCompanyId como query parameter si está disponible
+                        if (affiliatedCompanyId.HasValue)
+                        {
+                            fullImageUrl += $"?affiliatedCompanyId={affiliatedCompanyId.Value}";
+                        }
+                        
                         // Cargar la imagen usando HttpClient con autenticación
                         // Esto reemplazará la imagen local si tiene éxito
                         await LoadImageSecurelyAsync(fullImageUrl);
+                        
+                        // Guardar la imagen cargada en caché si se cargó exitosamente
+                        if (AnalysisImage.Source != null && _cachedImageSource == null)
+                        {
+                            _cachedImageSource = AnalysisImage.Source;
+                        }
                     }
                     catch (UriFormatException ex)
                     {
@@ -135,7 +183,23 @@ public partial class ResultsPage : ContentPage
 
     private async void OnNewAnalysisClicked(object? sender, EventArgs e)
     {
+        // Limpiar caché local y del servicio cuando se inicia un nuevo análisis
+        ClearCache();
+        _navigationDataService.Clear(); // Limpiar también el servicio Singleton
         await Shell.Current.GoToAsync("//CapturePage");
+    }
+    
+    /// <summary>
+    /// Limpia la caché de resultados. Se llama cuando se inicia un nuevo análisis.
+    /// </summary>
+    private void ClearCache()
+    {
+        _cachedResult = null;
+        _cachedImageBytes = null;
+        _cachedImageSource = null;
+        Findings.Clear();
+        AnalysisImage.Source = null;
+        System.Diagnostics.Debug.WriteLine("Caché de resultados limpiada");
     }
 
     private async void OnHistoryClicked(object? sender, EventArgs e)
@@ -168,7 +232,9 @@ public partial class ResultsPage : ContentPage
             if (response.IsSuccessStatusCode)
             {
                 var imageBytes = await response.Content.ReadAsByteArrayAsync();
-                AnalysisImage.Source = ImageSource.FromStream(() => new MemoryStream(imageBytes));
+                var imageSource = ImageSource.FromStream(() => new MemoryStream(imageBytes));
+                AnalysisImage.Source = imageSource;
+                _cachedImageSource = imageSource; // Guardar en caché para futuras navegaciones
                 System.Diagnostics.Debug.WriteLine($"Imagen cargada exitosamente desde el servidor: {imageUrl}");
             }
             else

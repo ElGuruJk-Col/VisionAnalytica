@@ -132,6 +132,38 @@ namespace VisioAnalytica.Infrastructure.Services
 
             return await SendEmailAsync(message);
         }
+
+        public async Task<bool> SendAccountLockedEmailAsync(string email, string userName)
+        {
+            var subject = "Cuenta Bloqueada - VisioAnalytica";
+            var body = EmailTemplates.GetAccountLockedTemplate(userName);
+
+            var message = new EmailMessage
+            {
+                To = email,
+                Subject = subject,
+                Body = body,
+                IsHtml = true
+            };
+
+            return await SendEmailAsync(message);
+        }
+
+        public async Task<bool> SendInspectorWithoutCompaniesEmailAsync(string supervisorEmail, string supervisorName, string inspectorEmail, string inspectorName)
+        {
+            var subject = "Inspector sin Empresas Asignadas - VisioAnalytica";
+            var body = EmailTemplates.GetInspectorWithoutCompaniesTemplate(supervisorName, inspectorEmail, inspectorName);
+
+            var message = new EmailMessage
+            {
+                To = supervisorEmail,
+                Subject = subject,
+                Body = body,
+                IsHtml = true
+            };
+
+            return await SendEmailAsync(message);
+        }
     }
 }
 
