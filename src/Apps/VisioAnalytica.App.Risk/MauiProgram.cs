@@ -29,14 +29,23 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IAnalysisService, AnalysisService>();
 		builder.Services.AddSingleton<INavigationDataService, NavigationDataService>();
 
-		// Registrar páginas
-		builder.Services.AddTransient<Pages.LoginPage>();
+		// Registrar páginas (LoginPage necesita IApiClient también)
+		builder.Services.AddTransient<Pages.LoginPage>(sp => 
+			new Pages.LoginPage(
+				sp.GetRequiredService<IAuthService>(),
+				sp.GetRequiredService<IApiClient>()));
 		builder.Services.AddTransient<Pages.RegisterPage>();
-		builder.Services.AddTransient<Pages.CapturePage>();
+		builder.Services.AddTransient<Pages.CapturePage>(sp => 
+			new Pages.CapturePage(
+				sp.GetRequiredService<IAnalysisService>(),
+				sp.GetRequiredService<INavigationDataService>(),
+				sp.GetRequiredService<IApiClient>(),
+				sp.GetRequiredService<IAuthService>()));
 		builder.Services.AddTransient<Pages.ResultsPage>();
 		builder.Services.AddTransient<Pages.HistoryPage>();
 		builder.Services.AddTransient<Pages.ForgotPasswordPage>();
 		builder.Services.AddTransient<Pages.ChangePasswordPage>();
+		builder.Services.AddTransient<Pages.ResetPasswordPage>();
 		builder.Services.AddTransient<MainPage>();
 
 		// Registrar AppShell
@@ -53,6 +62,7 @@ public static class MauiProgram
 		Routing.RegisterRoute("RegisterPage", new DependencyInjectionRouteFactory<Pages.RegisterPage>(serviceProvider));
 		Routing.RegisterRoute("ForgotPasswordPage", new DependencyInjectionRouteFactory<Pages.ForgotPasswordPage>(serviceProvider));
 		Routing.RegisterRoute("ChangePasswordPage", new DependencyInjectionRouteFactory<Pages.ChangePasswordPage>(serviceProvider));
+		Routing.RegisterRoute("ResetPasswordPage", new DependencyInjectionRouteFactory<Pages.ResetPasswordPage>(serviceProvider));
 		Routing.RegisterRoute("CapturePage", new DependencyInjectionRouteFactory<Pages.CapturePage>(serviceProvider));
 		Routing.RegisterRoute("ResultsPage", new DependencyInjectionRouteFactory<Pages.ResultsPage>(serviceProvider));
 		Routing.RegisterRoute("HistoryPage", new DependencyInjectionRouteFactory<Pages.HistoryPage>(serviceProvider));

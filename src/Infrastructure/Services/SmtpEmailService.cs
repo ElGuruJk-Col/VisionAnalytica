@@ -85,10 +85,10 @@ namespace VisioAnalytica.Infrastructure.Services
             }
         }
 
-        public async Task<bool> SendPasswordResetEmailAsync(string email, string resetToken, string resetUrl)
+        public async Task<bool> SendPasswordResetEmailAsync(string email, string temporaryPassword, string userName)
         {
             var subject = "Recuperación de Contraseña - VisioAnalytica";
-            var body = EmailTemplates.GetPasswordResetTemplate(resetUrl, resetToken);
+            var body = EmailTemplates.GetPasswordResetTemplate(userName, temporaryPassword);
 
             var message = new EmailMessage
             {
@@ -125,6 +125,38 @@ namespace VisioAnalytica.Infrastructure.Services
             var message = new EmailMessage
             {
                 To = email,
+                Subject = subject,
+                Body = body,
+                IsHtml = true
+            };
+
+            return await SendEmailAsync(message);
+        }
+
+        public async Task<bool> SendAccountLockedEmailAsync(string email, string userName)
+        {
+            var subject = "Cuenta Bloqueada - VisioAnalytica";
+            var body = EmailTemplates.GetAccountLockedTemplate(userName);
+
+            var message = new EmailMessage
+            {
+                To = email,
+                Subject = subject,
+                Body = body,
+                IsHtml = true
+            };
+
+            return await SendEmailAsync(message);
+        }
+
+        public async Task<bool> SendInspectorWithoutCompaniesEmailAsync(string supervisorEmail, string supervisorName, string inspectorEmail, string inspectorName)
+        {
+            var subject = "Inspector sin Empresas Asignadas - VisioAnalytica";
+            var body = EmailTemplates.GetInspectorWithoutCompaniesTemplate(supervisorName, inspectorEmail, inspectorName);
+
+            var message = new EmailMessage
+            {
+                To = supervisorEmail,
                 Subject = subject,
                 Body = body,
                 IsHtml = true

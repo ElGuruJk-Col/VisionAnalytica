@@ -11,17 +11,19 @@ namespace VisioAnalytica.App.Risk.Pages;
 public partial class LoginPage : ContentPage
 {
     private IAuthService? _authService;
+    private IApiClient? _apiClient;
 
     // Constructor sin parámetros para ContentTemplate
-    public LoginPage() : this(null)
+    public LoginPage() : this(null, null)
     {
     }
 
     // Constructor con DI para navegación programática
-    public LoginPage(IAuthService? authService)
+    public LoginPage(IAuthService? authService, IApiClient? apiClient)
     {
         InitializeComponent();
         _authService = authService;
+        _apiClient = apiClient;
     }
 
     // Obtener el servicio desde DI si no está disponible
@@ -39,6 +41,23 @@ public partial class LoginPage : ContentPage
         }
 
         throw new InvalidOperationException("IAuthService no está disponible. La aplicación no se ha inicializado correctamente.");
+    }
+
+    // Obtener ApiClient desde DI si no está disponible
+    private IApiClient GetApiClient()
+    {
+        if (_apiClient != null)
+            return _apiClient;
+
+        // Intentar obtener desde el contenedor de DI
+        var serviceProvider = Handler?.MauiContext?.Services;
+        if (serviceProvider != null)
+        {
+            _apiClient = serviceProvider.GetRequiredService<IApiClient>();
+            return _apiClient;
+        }
+
+        throw new InvalidOperationException("IApiClient no está disponible. La aplicación no se ha inicializado correctamente.");
     }
 
     [SupportedOSPlatform("android")]
@@ -78,12 +97,55 @@ public partial class LoginPage : ContentPage
                 {
                     // Redirigir a la página de cambio de contraseña
                     await Shell.Current.GoToAsync("//ChangePasswordPage");
+                    return;
                 }
-                else
+                
+                // Verificar si es Inspector y tiene empresas asignadas
+                var authService = GetAuthService();
+                var roles = authService.CurrentUserRoles;
+                
+                if (roles.Contains("Inspector"))
                 {
-                    // Login exitoso - navegar a la página principal
-                    await Shell.Current.GoToAsync("//MainPage");
+                    try
+                    {
+                        var apiClient = GetApiClient();
+                        var companies = await apiClient.GetMyCompaniesAsync();
+                        
+                        if (companies == null || companies.Count == 0)
+                        {
+                            // Notificar al supervisor
+                            await apiClient.NotifyInspectorWithoutCompaniesAsync();
+                            
+                            // Mostrar mensaje y bloquear acceso
+                            await DisplayAlertAsync(
+                                "Acceso Deshabilitado",
+                                "Tu ingreso está deshabilitado, debes tener al menos una empresa asignada. Se ha notificado a tu superior.",
+                                "OK");
+                            
+                            // Cerrar sesión
+                            await authService.LogoutAsync();
+                            if (Shell.Current is AppShell shell)
+                            {
+                                shell.UpdateFlyoutMenu();
+                            }
+                            return;
+                        }
+                    }
+                    catch (ApiException ex)
+                    {
+                        // Si hay error al verificar empresas, mostrar mensaje pero permitir acceso
+                        System.Diagnostics.Debug.WriteLine($"Error al verificar empresas: {ex.Message}");
+                        // Continuar con el flujo normal
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error inesperado al verificar empresas: {ex}");
+                        // Continuar con el flujo normal si hay error
+                    }
                 }
+                
+                // Login exitoso - navegar a la página principal
+                await Shell.Current.GoToAsync("//MainPage");
             }
             else
             {
@@ -139,6 +201,33 @@ public partial class LoginPage : ContentPage
     {
         ErrorLabel.Text = message;
         ErrorLabel.IsVisible = true;
+    }
+
+    private void OnTogglePasswordClicked(object? sender, EventArgs e)
+    {
+        PasswordEntry.IsPassword = !PasswordEntry.IsPassword;
+        TogglePasswordButton.Text = PasswordEntry.IsPassword ? "👁" : "🔒";
+    }
+
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        // Limpiar campos al aparecer la página
+        ClearFields();
+    }
+
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        // Limpiar campos al salir de la página
+        ClearFields();
+    }
+
+    private void ClearFields()
+    {
+        EmailEntry.Text = string.Empty;
+        PasswordEntry.Text = string.Empty;
+        ErrorLabel.IsVisible = false;
     }
 }
 

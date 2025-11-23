@@ -35,12 +35,12 @@ namespace VisioAnalytica.Api.Extensions
             // --- 2. CONFIGURACIÓN DE IDENTITY ---
             services.AddIdentityCore<User>(options =>
             {
-                // Mantenemos tus reglas de contraseña relajadas para el desarrollo
-                options.Password.RequireDigit = false;
-                options.Password.RequireLowercase = false;
-                options.Password.RequireNonAlphanumeric = false;
-                options.Password.RequireUppercase = false;
-                options.Password.RequiredLength = 4;
+                // Reglas de contraseña seguras
+                options.Password.RequireDigit = true;
+                options.Password.RequireLowercase = true;
+                options.Password.RequireNonAlphanumeric = true;
+                options.Password.RequireUppercase = true;
+                options.Password.RequiredLength = 8;
             })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<VisioAnalyticaDbContext>()

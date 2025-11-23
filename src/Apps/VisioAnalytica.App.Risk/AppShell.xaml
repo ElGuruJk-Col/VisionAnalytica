@@ -32,7 +32,8 @@
                     BackgroundColor="Transparent"
                     TextColor="#512BD4"
                     HorizontalOptions="Start"
-                    Padding="0" />
+                    Padding="0"
+                    IsVisible="False" />
                 <Button 
                     Text="Recuperar Contraseña"
                     Clicked="OnForgotPasswordMenuClicked"
@@ -136,6 +137,12 @@
         Title="Cambiar Contraseña"
         ContentTemplate="{DataTemplate pages:ChangePasswordPage}"
         Route="ChangePasswordPage" />
+
+    <!-- Reset Password Page -->
+    <ShellContent
+        Title="Restablecer Contraseña"
+        ContentTemplate="{DataTemplate pages:ResetPasswordPage}"
+        Route="ResetPasswordPage" />
 
     <!-- Results Page -->
     <ShellContent

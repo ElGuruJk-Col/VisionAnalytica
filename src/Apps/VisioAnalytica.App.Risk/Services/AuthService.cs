@@ -15,7 +15,7 @@ public class AuthService : IAuthService
     private const string TokenKey = "auth_token";
     private const string UserEmailKey = "user_email";
     private bool _mustChangePassword;
-    private IList<string> _currentUserRoles = new List<string>();
+    private IList<string> _currentUserRoles = []; // Collection expression
 
     public AuthService(IApiClient apiClient)
     {
@@ -142,7 +142,7 @@ public class AuthService : IAuthService
         CurrentToken = null;
         CurrentUserEmail = null;
         _mustChangePassword = false;
-        _currentUserRoles = new List<string>();
+        _currentUserRoles = []; // Collection expression
         _apiClient.SetAuthToken(null);
 
         // Limpiar almacenamiento
@@ -176,7 +176,7 @@ public class AuthService : IAuthService
             _mustChangePassword = mustChangePasswordClaim != null && 
                                  bool.TryParse(mustChangePasswordClaim.Value, out var mustChange) && mustChange;
 
-            // Extraer roles
+            // Extraer roles usando collection expression
             _currentUserRoles = jsonToken.Claims
                 .Where(c => c.Type == ClaimTypes.Role || c.Type == "role")
                 .Select(c => c.Value)
@@ -186,7 +186,7 @@ public class AuthService : IAuthService
         {
             // Si hay error al decodificar, usar valores por defecto
             _mustChangePassword = false;
-            _currentUserRoles = new List<string>();
+            _currentUserRoles = []; // Collection expression
         }
     }
 
@@ -194,8 +194,16 @@ public class AuthService : IAuthService
     {
         try
         {
-            var token = SecureStorage.GetAsync(TokenKey).Result;
-            var email = SecureStorage.GetAsync(UserEmailKey).Result;
+            // Nota: SecureStorage.GetAsync es asíncrono, pero en el constructor no podemos usar await
+            // Esta es una limitación conocida. En producción, considerar inicialización asíncrona diferida
+            var tokenTask = SecureStorage.GetAsync(TokenKey);
+            var emailTask = SecureStorage.GetAsync(UserEmailKey);
+            
+            // Usar Task.WaitAll para esperar ambas tareas de forma más eficiente
+            Task.WaitAll([tokenTask, emailTask]);
+            
+            var token = tokenTask.Result;
+            var email = emailTask.Result;
 
             if (!string.IsNullOrWhiteSpace(token) && !string.IsNullOrWhiteSpace(email))
             {
@@ -211,7 +219,7 @@ public class AuthService : IAuthService
             CurrentToken = null;
             CurrentUserEmail = null;
             _mustChangePassword = false;
-            _currentUserRoles = new List<string>();
+            _currentUserRoles = []; // Collection expression
         }
     }
 }

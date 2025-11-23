@@ -93,5 +93,26 @@ public partial class ForgotPasswordPage : ContentPage
         SuccessLabel.IsVisible = true;
         ErrorLabel.IsVisible = false;
     }
+
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        // Limpiar campos al aparecer la página
+        ClearFields();
+    }
+
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        // Limpiar campos al salir de la página
+        ClearFields();
+    }
+
+    private void ClearFields()
+    {
+        EmailEntry.Text = string.Empty;
+        ErrorLabel.IsVisible = false;
+        SuccessLabel.IsVisible = false;
+    }
 }
 

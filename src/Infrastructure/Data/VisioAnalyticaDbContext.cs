@@ -31,7 +31,7 @@ namespace VisioAnalytica.Infrastructure.Data
             // --- REGLAS DE NEGOCIO Y MODELADO ---
             // ===================================
 
-            // 1. Reglas para la entidad User (Relación con Organization)
+            // 1. Reglas para la entidad User (Relación con Organization y Supervisor)
             builder.Entity<User>(entity =>
             {
                 // Un Usuario pertenece a UNA Organización.
@@ -41,6 +41,13 @@ namespace VisioAnalytica.Infrastructure.Data
                       .HasForeignKey(u => u.OrganizationId)
                       // Si la Organización se borra, los Usuarios NO se borran (Restrict).
                       .OnDelete(DeleteBehavior.Restrict);
+
+                // Relación de Supervisor (self-referencing)
+                // Un Inspector puede tener un Supervisor (Admin/SuperAdmin)
+                entity.HasOne(u => u.Supervisor)
+                      .WithMany()
+                      .HasForeignKey(u => u.SupervisorId)
+                      .OnDelete(DeleteBehavior.NoAction); // NoAction para evitar ciclos de cascada en SQL Server
             });
 
             // 2. Reglas para la entidad Organization

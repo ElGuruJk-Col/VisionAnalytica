@@ -21,27 +21,15 @@ namespace VisioAnalytica.Core.Models.Dtos
     /// <summary>
     /// DTO para cambiar la contraseña.
     /// </summary>
-    public class ChangePasswordDto
-    {
-        public string CurrentPassword { get; set; } = null!;
-        public string NewPassword { get; set; } = null!;
-    }
+    public record ChangePasswordDto(string? CurrentPassword, string NewPassword);
 
     /// <summary>
     /// DTO para solicitar recuperación de contraseña.
     /// </summary>
-    public class ForgotPasswordDto
-    {
-        public string Email { get; set; } = null!;
-    }
+    public record ForgotPasswordDto(string Email);
 
     /// <summary>
     /// DTO para restablecer la contraseña con token.
     /// </summary>
-    public class ResetPasswordDto
-    {
-        public string Email { get; set; } = null!;
-        public string Token { get; set; } = null!;
-        public string NewPassword { get; set; } = null!;
-    }
+    public record ResetPasswordDto(string Email, string Token, string NewPassword);
 }
