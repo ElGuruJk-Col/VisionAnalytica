@@ -8,14 +8,19 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.22" />
+    <PackageReference Include="Hangfire.Core" Version="1.8.22" />
+    <PackageReference Include="Hangfire.SqlServer" Version="1.8.22" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+    <!-- <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" /> -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.OpenApi" Version="2.3.0" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Microsoft.OpenApi" Version="1.6.14" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+    <!-- Forzar versión más reciente de Newtonsoft.Json para mitigar vulnerabilidad GHSA-5crp-9r3c-p9vr -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
   <ItemGroup>

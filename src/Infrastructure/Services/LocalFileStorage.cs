@@ -152,6 +152,51 @@ namespace VisioAnalytica.Infrastructure.Services
             }
         }
 
+        public async Task<byte[]?> ReadImageAsync(string imageUrl)
+        {
+            try
+            {
+                // Convertir URL a ruta de archivo
+                string? filePath = null;
+                
+                // Si la URL es del formato /api/v1/file/images/{orgId}/{fileName}
+                if (imageUrl.StartsWith("/api/v1/file/images/"))
+                {
+                    var parts = imageUrl.Replace("/api/v1/file/images/", "").Split('/');
+                    if (parts.Length >= 2 && Guid.TryParse(parts[0], out var orgId))
+                    {
+                        var fileName = parts[1];
+                        var orgFolder = Path.Combine(_uploadsPath, orgId.ToString());
+                        filePath = Path.Combine(orgFolder, fileName);
+                    }
+                }
+                // Si es una ruta relativa que empieza con /uploads
+                else if (imageUrl.StartsWith("/uploads/"))
+                {
+                    var relativePath = imageUrl.Replace("/uploads/", "");
+                    filePath = Path.Combine(_uploadsPath, relativePath);
+                }
+                // Si es una ruta absoluta y está dentro de _uploadsPath
+                else if (Path.IsPathRooted(imageUrl) && imageUrl.StartsWith(_uploadsPath))
+                {
+                    filePath = imageUrl;
+                }
+                
+                if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+                {
+                    _logger.LogWarning("No se pudo encontrar la imagen en la ruta: {FilePath} (URL original: {ImageUrl})", filePath, imageUrl);
+                    return null;
+                }
+                
+                return await File.ReadAllBytesAsync(filePath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al leer imagen desde {ImageUrl}", imageUrl);
+                return null;
+            }
+        }
+        
         public async Task<bool> DeleteImageAsync(string imageUrl)
         {
             try

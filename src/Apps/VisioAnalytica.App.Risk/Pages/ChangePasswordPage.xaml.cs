@@ -240,19 +240,22 @@ public partial class ChangePasswordPage : ContentPage
     private void OnToggleCurrentPasswordClicked(object? sender, EventArgs e)
     {
         CurrentPasswordEntry.IsPassword = !CurrentPasswordEntry.IsPassword;
-        ToggleCurrentPasswordButton.Text = CurrentPasswordEntry.IsPassword ? "👁" : "🔒";
+        // Iconos monocromáticos modernos: ● (ojo cerrado) y ○ (ojo abierto)
+        ToggleCurrentPasswordButton.Text = CurrentPasswordEntry.IsPassword ? "●" : "○";
     }
 
     private void OnToggleNewPasswordClicked(object? sender, EventArgs e)
     {
         NewPasswordEntry.IsPassword = !NewPasswordEntry.IsPassword;
-        ToggleNewPasswordButton.Text = NewPasswordEntry.IsPassword ? "👁" : "🔒";
+        // Iconos monocromáticos modernos: ● (ojo cerrado) y ○ (ojo abierto)
+        ToggleNewPasswordButton.Text = NewPasswordEntry.IsPassword ? "●" : "○";
     }
 
     private void OnToggleConfirmPasswordClicked(object? sender, EventArgs e)
     {
         ConfirmPasswordEntry.IsPassword = !ConfirmPasswordEntry.IsPassword;
-        ToggleConfirmPasswordButton.Text = ConfirmPasswordEntry.IsPassword ? "👁" : "🔒";
+        // Iconos monocromáticos modernos: ● (ojo cerrado) y ○ (ojo abierto)
+        ToggleConfirmPasswordButton.Text = ConfirmPasswordEntry.IsPassword ? "●" : "○";
     }
 
     /// <summary>

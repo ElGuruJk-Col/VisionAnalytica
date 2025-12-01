@@ -1,50 +1,99 @@
-using System.Runtime.Versioning;
 using Microsoft.Maui.ApplicationModel;
 using VisioAnalytica.App.Risk.Services;
 using VisioAnalytica.Core.Models.Dtos;
 
 namespace VisioAnalytica.App.Risk.Pages;
 
-[SupportedOSPlatform("android")]
-[SupportedOSPlatform("ios")]
-[SupportedOSPlatform("maccatalyst")]
-[SupportedOSPlatform("windows")]
 public partial class CapturePage : ContentPage
 {
     private readonly IAnalysisService _analysisService;
     private readonly INavigationDataService _navigationDataService;
-    private readonly IApiClient? _apiClient;
-    private readonly IAuthService? _authService;
+    private readonly IApiClient _apiClient;
+    private readonly IAuthService _authService;
     private byte[]? _capturedImageBytes;
     private IList<AffiliatedCompanyDto>? _assignedCompanies;
     private AffiliatedCompanyDto? _selectedCompany;
 
-    public CapturePage(IAnalysisService analysisService, INavigationDataService navigationDataService, IApiClient? apiClient = null, IAuthService? authService = null)
+    // Constructor con DI - Los servicios son requeridos y siempre se inyectan desde MauiProgram
+    public CapturePage(IAnalysisService analysisService, INavigationDataService navigationDataService, IApiClient apiClient, IAuthService authService)
     {
-        InitializeComponent();
-        _analysisService = analysisService;
-        _navigationDataService = navigationDataService;
-        _apiClient = apiClient;
-        _authService = authService;
+        try
+        {
+            InitializeComponent();
+            _analysisService = analysisService ?? throw new ArgumentNullException(nameof(analysisService));
+            _navigationDataService = navigationDataService ?? throw new ArgumentNullException(nameof(navigationDataService));
+            _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
+            _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error en constructor de CapturePage: {ex}");
+            throw;
+        }
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
         
-        // Verificar si es Inspector y cargar empresas asignadas
-        if (_authService != null && _apiClient != null)
+        try
         {
+            // Esperar un momento para que los controles estén completamente inicializados
+            await Task.Delay(100);
+            
+            // VALIDACIÓN: Solo SuperAdmin puede acceder a esta página (uso interno/desarrollo)
             var roles = _authService.CurrentUserRoles;
-            if (roles.Contains("Inspector"))
+            if (!roles.Contains("SuperAdmin"))
             {
-                await LoadAssignedCompanies();
+                // Si no es SuperAdmin, redirigir a MainPage
+                await MainThread.InvokeOnMainThreadAsync(async () =>
+                {
+                    await DisplayAlertAsync(
+                        "Acceso Restringido", 
+                        "Esta página es solo para uso interno de desarrollo.", 
+                        "OK");
+                    await Shell.Current.GoToAsync("//MainPage");
+                });
+                return;
             }
-            else
+            
+            // Cargar empresas según el rol
+            await MainThread.InvokeOnMainThreadAsync(async () =>
             {
-                CompanyLabel.IsVisible = false;
-                CompanyPicker.IsVisible = false;
-            }
+                if (roles.Contains("Inspector"))
+                {
+                    await LoadAssignedCompanies();
+                }
+                else if (roles.Contains("SuperAdmin"))
+                {
+                    // Para SuperAdmin: modo de prueba sin persistencia, no necesita empresa
+                    if (CompanyLabel != null)
+                        CompanyLabel.IsVisible = false;
+                    if (CompanyPicker != null)
+                        CompanyPicker.IsVisible = false;
+                    
+                    // Habilitar botón de captura directamente
+                    if (CaptureButton != null)
+                        CaptureButton.IsEnabled = true;
+                }
+                else if (roles.Contains("Admin"))
+                {
+                    // Para Admin, cargar todas las empresas de la organización
+                    await LoadAllCompanies();
+                }
+                else
+                {
+                    // Para otros roles, ocultar controles de empresa
+                    if (CompanyLabel != null)
+                        CompanyLabel.IsVisible = false;
+                    if (CompanyPicker != null)
+                        CompanyPicker.IsVisible = false;
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error en OnAppearing de CapturePage: {ex}");
         }
     }
 
@@ -56,45 +105,142 @@ public partial class CapturePage : ContentPage
         {
             _assignedCompanies = await _apiClient.GetMyCompaniesAsync();
             
-            if (_assignedCompanies != null && _assignedCompanies.Count > 0)
+            // Actualizar UI en el hilo principal
+            await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                CompanyPicker.ItemsSource = _assignedCompanies.ToList();
-                CompanyLabel.IsVisible = true;
-                CompanyPicker.IsVisible = true;
-                
-                // Seleccionar primera empresa por defecto
-                if (_assignedCompanies.Count == 1)
+                if (_assignedCompanies != null && _assignedCompanies.Count > 0)
                 {
-                    CompanyPicker.SelectedItem = _assignedCompanies[0];
-                    _selectedCompany = _assignedCompanies[0];
+                    if (CompanyPicker != null)
+                    {
+                        CompanyPicker.ItemsSource = _assignedCompanies.ToList();
+                        CompanyPicker.IsVisible = true;
+                        
+                        // Seleccionar primera empresa por defecto
+                        if (_assignedCompanies.Count == 1)
+                        {
+                            CompanyPicker.SelectedItem = _assignedCompanies[0];
+                            _selectedCompany = _assignedCompanies[0];
+                        }
+                    }
+                    
+                    if (CompanyLabel != null)
+                        CompanyLabel.IsVisible = true;
+                    
+                    // Habilitar botón de captura cuando hay empresa seleccionada
+                    if (CaptureButton != null && _selectedCompany != null)
+                        CaptureButton.IsEnabled = true;
                 }
-            }
-            else
-            {
-                // No debería llegar aquí si la validación de login funciona
-                await DisplayAlertAsync("Error", "No tienes empresas asignadas.", "OK");
-                await Shell.Current.GoToAsync("//MainPage");
-            }
+                else
+                {
+                    // No debería llegar aquí si la validación de login funciona
+                    // Mostrar alerta en el hilo principal
+                    MainThread.BeginInvokeOnMainThread(async () =>
+                    {
+                        await DisplayAlertAsync("Error", "No tienes empresas asignadas.", "OK");
+                        await Shell.Current.GoToAsync("//MainPage");
+                    });
+                }
+            });
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Error al cargar empresas: {ex}");
-            await DisplayAlertAsync("Error", "No se pudieron cargar las empresas asignadas.", "OK");
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
+                await DisplayAlertAsync("Error", "No se pudieron cargar las empresas asignadas.", "OK");
+            });
+        }
+    }
+
+    private async Task LoadAllCompanies()
+    {
+        if (_apiClient == null) return;
+
+        try
+        {
+            _assignedCompanies = await _apiClient.GetAllCompaniesAsync();
+            
+            // Actualizar UI en el hilo principal
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                if (_assignedCompanies != null && _assignedCompanies.Count > 0)
+                {
+                    if (CompanyPicker != null)
+                    {
+                        CompanyPicker.ItemsSource = _assignedCompanies.ToList();
+                        CompanyPicker.IsVisible = true;
+                        
+                        // Seleccionar primera empresa por defecto
+                        if (_assignedCompanies.Count == 1)
+                        {
+                            CompanyPicker.SelectedItem = _assignedCompanies[0];
+                            _selectedCompany = _assignedCompanies[0];
+                        }
+                    }
+                    
+                    if (CompanyLabel != null)
+                        CompanyLabel.IsVisible = true;
+                    
+                    // Habilitar botón de captura cuando hay empresa seleccionada
+                    if (CaptureButton != null && _selectedCompany != null)
+                        CaptureButton.IsEnabled = true;
+                }
+                else
+                {
+                    // Mostrar alerta si no hay empresas
+                    MainThread.BeginInvokeOnMainThread(async () =>
+                    {
+                        await DisplayAlertAsync("Error", "No hay empresas disponibles en la organización. Debes crear al menos una empresa antes de realizar análisis.", "OK");
+                    });
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error al cargar empresas: {ex}");
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
+                await DisplayAlertAsync("Error", "No se pudieron cargar las empresas.", "OK");
+            });
         }
     }
 
     private void OnCompanySelected(object? sender, EventArgs e)
     {
-        if (CompanyPicker.SelectedItem is AffiliatedCompanyDto company)
+        try
         {
-            _selectedCompany = company;
+            if (CompanyPicker != null && CompanyPicker.SelectedItem is AffiliatedCompanyDto company)
+            {
+                _selectedCompany = company;
+                
+                // Habilitar botones cuando se selecciona una empresa
+                if (CaptureButton != null)
+                    CaptureButton.IsEnabled = true;
+                
+                // Habilitar botón de análisis si hay imagen capturada
+                if (AnalyzeButton != null && _capturedImageBytes != null && _capturedImageBytes.Length > 0)
+                    AnalyzeButton.IsEnabled = true;
+            }
+            else
+            {
+                _selectedCompany = null;
+                // Deshabilitar botones si no hay empresa seleccionada
+                var roles = _authService.CurrentUserRoles;
+                if (roles.Contains("Inspector") || roles.Contains("SuperAdmin") || roles.Contains("Admin"))
+                {
+                    if (CaptureButton != null)
+                        CaptureButton.IsEnabled = false;
+                    if (AnalyzeButton != null)
+                        AnalyzeButton.IsEnabled = false;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error en OnCompanySelected: {ex}");
         }
     }
 
-    [SupportedOSPlatform("android")]
-    [SupportedOSPlatform("ios")]
-    [SupportedOSPlatform("maccatalyst")]
-    [SupportedOSPlatform("windows")]
     private async void OnCaptureClicked(object? sender, EventArgs e)
     {
         // Validar que haya seleccionado una empresa (si es Inspector)
@@ -199,67 +345,173 @@ public partial class CapturePage : ContentPage
             return;
         }
 
-        // Validar empresa seleccionada (si es Inspector)
-        if (_authService != null)
+        var roles = _authService?.CurrentUserRoles ?? new List<string>();
+        var isSuperAdmin = roles.Contains("SuperAdmin");
+
+        // Para SuperAdmin: análisis directo sin persistencia (modo de prueba)
+        if (isSuperAdmin)
         {
-            var roles = _authService.CurrentUserRoles;
-            if (roles.Contains("Inspector") && _selectedCompany == null)
+            try
             {
-                await DisplayAlertAsync(
-                    "Empresa Requerida",
-                    "Debes seleccionar una empresa cliente antes de analizar.",
-                    "OK");
-                return;
+                SetLoading(true);
+                StatusLabel.IsVisible = true;
+                StatusLabel.Text = "Analizando imagen...";
+                StatusLabel.TextColor = Colors.Blue;
+
+                // Realizar análisis directo sin crear inspección
+                System.Diagnostics.Debug.WriteLine("🔍 SuperAdmin: Iniciando análisis directo (sin persistencia)...");
+                
+                var result = await _analysisService.AnalyzeImageAsync(_capturedImageBytes);
+
+                if (result != null)
+                {
+                    System.Diagnostics.Debug.WriteLine("✅ Análisis completado exitosamente");
+                    
+                    try
+                    {
+                        // Almacenar el resultado en el servicio de navegación (en memoria)
+                        // No guardamos AffiliatedCompanyId porque no hay empresa en modo de prueba
+                        _navigationDataService.SetAnalysisResult(result, _capturedImageBytes, null);
+                        
+                        StatusLabel.Text = "✅ Análisis Completado";
+                        StatusLabel.TextColor = Colors.Green;
+                        StatusLabel.IsVisible = true;
+
+                        // Limpiar la imagen capturada
+                        _capturedImageBytes = null;
+                        CapturedImage.IsVisible = false;
+                        PlaceholderLabel.IsVisible = true;
+                        AnalyzeButton.IsEnabled = false;
+
+                        // Navegar a la página de resultados
+                        await Shell.Current.GoToAsync("//ResultsPage");
+                    }
+                    catch (Exception ex)
+                    {
+                        await DisplayAlertAsync(
+                            "Error", 
+                            $"Error al navegar a la página de resultados: {ex.Message}", 
+                            "OK");
+                    }
+                }
+                else
+                {
+                    await DisplayAlertAsync("Error", "No se pudo analizar la imagen", "OK");
+                }
             }
+            catch (ApiException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ ApiException al analizar: {ex.Message} (Status: {ex.StatusCode})");
+                await DisplayAlertAsync("Error", ex.Message, "OK");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Error inesperado al analizar: {ex}");
+                System.Diagnostics.Debug.WriteLine($"   StackTrace: {ex.StackTrace}");
+                await DisplayAlertAsync("Error", "Ocurrió un error inesperado al analizar la imagen. Por favor, intenta nuevamente.", "OK");
+            }
+            finally
+            {
+                SetLoading(false);
+            }
+            
+            return; // Salir temprano para SuperAdmin
+        }
+
+        // Para otros roles (Inspector, Admin): usar el flujo con persistencia
+        // Validar empresa seleccionada
+        if (_selectedCompany == null)
+        {
+            await DisplayAlertAsync(
+                "Empresa Requerida",
+                "Debes seleccionar una empresa cliente antes de analizar.",
+                "OK");
+            return;
         }
 
         try
         {
             SetLoading(true);
-            StatusLabel.IsVisible = false;
+            StatusLabel.IsVisible = true;
+            StatusLabel.Text = "Creando inspección...";
+            StatusLabel.TextColor = Colors.Blue;
 
-            // Realizar análisis
-            var result = await _analysisService.AnalyzeImageAsync(_capturedImageBytes);
+            // Crear inspección con la foto usando el nuevo flujo
+            var photoDto = new PhotoDto(
+                Convert.ToBase64String(_capturedImageBytes),
+                DateTime.UtcNow,
+                null
+            );
 
-            if (result != null)
+            var createRequest = new CreateInspectionDto(
+                _selectedCompany.Id,
+                new List<PhotoDto> { photoDto }
+            );
+
+            System.Diagnostics.Debug.WriteLine($"📤 Creando inspección para empresa {_selectedCompany.Name} (ID: {_selectedCompany.Id})");
+
+            var inspection = await _apiClient.CreateInspectionAsync(createRequest);
+
+            if (inspection == null)
             {
-                try
-                {
-                    // Almacenar el resultado en el servicio de navegación (en memoria)
-                    // Esto evita pasar datos grandes por URL
-                    // También guardamos los bytes de la imagen para mostrarla localmente como fallback
-                    // Guardar también el AffiliatedCompanyId si está seleccionado (para Inspectores)
-                    var companyId = _selectedCompany?.Id;
-                    _navigationDataService.SetAnalysisResult(result, _capturedImageBytes, companyId);
-                    
-                    // Navegar a la página de resultados sin parámetros
-                    // La página de resultados recuperará los datos del servicio
-                    // Usar /// para ruta absoluta en Shell
-                    await Shell.Current.GoToAsync("///ResultsPage");
-                }
-                catch (Exception ex)
-                {
-                    await DisplayAlertAsync(
-                        "Error", 
-                        $"Error al navegar a la página de resultados: {ex.Message}", 
-                        "OK");
-                }
+                await DisplayAlertAsync("Error", "No se pudo crear la inspección.", "OK");
+                SetLoading(false);
+                return;
             }
-            else
+
+            System.Diagnostics.Debug.WriteLine($"✅ Inspección creada: {inspection.Id} con {inspection.Photos.Count} foto(s)");
+
+            StatusLabel.Text = "Iniciando análisis en segundo plano...";
+            StatusLabel.TextColor = Colors.Blue;
+
+            // Iniciar análisis de la foto
+            var photoId = inspection.Photos.FirstOrDefault()?.Id;
+            if (!photoId.HasValue)
             {
-                await DisplayAlertAsync("Error", "No se pudo analizar la imagen", "OK");
+                await DisplayAlertAsync("Error", "No se pudo obtener el ID de la foto.", "OK");
+                SetLoading(false);
+                return;
             }
+
+            var analyzeRequest = new AnalyzeInspectionDto(
+                inspection.Id,
+                new List<Guid> { photoId.Value }
+            );
+
+            System.Diagnostics.Debug.WriteLine($"🔍 Iniciando análisis de foto {photoId.Value}...");
+
+            var jobId = await _apiClient.StartAnalysisAsync(analyzeRequest);
+            
+            System.Diagnostics.Debug.WriteLine($"✅ Análisis iniciado con JobId: {jobId}");
+
+            StatusLabel.Text = "✅ Análisis Iniciado";
+            StatusLabel.TextColor = Colors.Green;
+            StatusLabel.IsVisible = true;
+
+            // Limpiar la imagen capturada
+            _capturedImageBytes = null;
+            CapturedImage.IsVisible = false;
+            PlaceholderLabel.IsVisible = true;
+            AnalyzeButton.IsEnabled = false;
+
+            await DisplayAlertAsync(
+                "Análisis Iniciado",
+                "El análisis se está procesando en segundo plano. Puedes ver el progreso en el historial de inspecciones.",
+                "OK");
+
+            // Navegar al historial de inspecciones
+            await Shell.Current.GoToAsync("//InspectionHistoryPage");
         }
         catch (ApiException ex)
         {
-            // El ApiException ya contiene un mensaje amigable
-            await DisplayAlertAsync("Error", ex.Message, "OK");
+            System.Diagnostics.Debug.WriteLine($"❌ ApiException al analizar: {ex.Message} (Status: {ex.StatusCode})");
+            await DisplayAlertAsync("Error", $"Error al iniciar el análisis: {ex.Message}", "OK");
         }
         catch (Exception ex)
         {
-            // Para errores inesperados, mostrar un mensaje genérico
-            await DisplayAlertAsync("Error", "Ocurrió un error inesperado al analizar la imagen. Por favor, intenta nuevamente.", "OK");
-            System.Diagnostics.Debug.WriteLine($"Error inesperado al analizar imagen: {ex}");
+            System.Diagnostics.Debug.WriteLine($"❌ Error inesperado al analizar: {ex}");
+            System.Diagnostics.Debug.WriteLine($"   StackTrace: {ex.StackTrace}");
+            await DisplayAlertAsync("Error", "Ocurrió un error inesperado al iniciar el análisis. Por favor, intenta nuevamente.", "OK");
         }
         finally
         {
@@ -280,7 +532,6 @@ public partial class CapturePage : ContentPage
     /// Solicita permisos de almacenamiento específicos para Android 12 y anteriores.
     /// Para Android 13+ (Tiramisu), los permisos de medios se manejan automáticamente con MediaPicker.
     /// </summary>
-    [SupportedOSPlatform("android")]
     private async Task<bool> RequestAndroidStoragePermissionsAsync()
     {
         // Para Android 12 y anteriores: solicitar READ_EXTERNAL_STORAGE y WRITE_EXTERNAL_STORAGE

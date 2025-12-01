@@ -58,6 +58,7 @@ namespace VisioAnalytica.Infrastructure.Data
             var inspections = await _context.Inspections
                 .Include(i => i.Findings) // Incluimos los detalles
                 .Include(i => i.User) // Incluir User para obtener UserName
+                .Include(i => i.AffiliatedCompany) // Incluir Empresa Afiliada
                 .Where(i => i.OrganizationId == organizationId)
                 .OrderByDescending(i => i.AnalysisDate) // Las más recientes primero
                 .AsNoTracking() // Esto es una consulta de lectura, hacemos que sea más rápida.

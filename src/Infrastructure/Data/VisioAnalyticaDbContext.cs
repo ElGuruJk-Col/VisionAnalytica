@@ -19,6 +19,7 @@ namespace VisioAnalytica.Infrastructure.Data
         // --- ¡NUEVOS DBSETS PARA PERSISTENCIA DE ANÁLISIS (Capítulo 3)! ---
         public DbSet<Inspection> Inspections { get; set; }
         public DbSet<Finding> Findings { get; set; }
+        public DbSet<Photo> Photos { get; set; }
 
         // --- EMPRESAS AFILIADAS (Sistema de Roles) ---
         public DbSet<AffiliatedCompany> AffiliatedCompanies { get; set; }
@@ -84,9 +85,39 @@ namespace VisioAnalytica.Infrastructure.Data
                       .HasForeignKey(f => f.InspectionId)
                       // ¡CRÍTICO! Si se borra la Inspección, se borran sus detalles (Cascade).
                       .OnDelete(DeleteBehavior.Cascade);
+
+                // Relación 1:N con Photo (las fotos capturadas).
+                // Usamos Restrict en lugar de Cascade para evitar múltiples rutas de cascada
+                entity.HasMany(i => i.Photos)
+                      .WithOne(p => p.Inspection)
+                      .HasForeignKey(p => p.InspectionId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Relación opcional: Inspección de análisis generada por una foto.
+                entity.HasMany<Photo>()
+                      .WithOne(p => p.AnalysisInspection)
+                      .HasForeignKey(p => p.AnalysisInspectionId)
+                      .OnDelete(DeleteBehavior.SetNull);
             });
 
-            // 4. Reglas para la entidad AffiliatedCompany
+            // 4. Reglas para la entidad Photo
+            builder.Entity<Photo>(entity =>
+            {
+                // Relación N:1 con Inspection (la inspección a la que pertenece).
+                // Usamos Restrict en lugar de Cascade para evitar múltiples rutas de cascada
+                entity.HasOne(p => p.Inspection)
+                      .WithMany(i => i.Photos)
+                      .HasForeignKey(p => p.InspectionId)
+                      .OnDelete(DeleteBehavior.Restrict);
+                
+                // Relación opcional con AnalysisInspection
+                entity.HasOne(p => p.AnalysisInspection)
+                      .WithMany()
+                      .HasForeignKey(p => p.AnalysisInspectionId)
+                      .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            // 5. Reglas para la entidad AffiliatedCompany
             builder.Entity<AffiliatedCompany>(entity =>
             {
                 // Relación N:1 con Organization.
@@ -99,7 +130,7 @@ namespace VisioAnalytica.Infrastructure.Data
                 entity.HasIndex(ac => new { ac.Name, ac.OrganizationId }).IsUnique();
             });
 
-            // 5. Relación Many-to-Many: Inspector (User) ↔ Empresas Afiliadas
+            // 6. Relación Many-to-Many: Inspector (User) ↔ Empresas Afiliadas
             builder.Entity<User>()
                 .HasMany(u => u.AssignedCompanies)
                 .WithMany(ac => ac.AssignedInspectors)

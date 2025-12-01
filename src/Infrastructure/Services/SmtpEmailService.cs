@@ -74,6 +74,15 @@ namespace VisioAnalytica.Infrastructure.Services
                     }
                 }
 
+                if (message.Attachments != null && message.Attachments.Any())
+                {
+                    foreach (var attachment in message.Attachments)
+                    {
+                        var stream = new MemoryStream(attachment.Value);
+                        mailMessage.Attachments.Add(new Attachment(stream, attachment.Key));
+                    }
+                }
+
                 await smtpClient.SendMailAsync(mailMessage);
                 _logger.LogInformation("Email enviado exitosamente a {To}", message.To);
                 return true;

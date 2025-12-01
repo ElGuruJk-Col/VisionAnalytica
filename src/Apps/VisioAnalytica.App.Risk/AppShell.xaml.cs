@@ -1,6 +1,7 @@
 ﻿using VisioAnalytica.App.Risk.Pages;
 using Microsoft.Maui.Controls;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Maui.ApplicationModel;
 using VisioAnalytica.App.Risk.Services;
 
 namespace VisioAnalytica.App.Risk;
@@ -96,9 +97,17 @@ public partial class AppShell : Shell
 				{
 					PreviousRoute = "//MainPage";
 				}
+				else if (currentLocation.Contains("InspectionHistoryPage"))
+				{
+					PreviousRoute = "//InspectionHistoryPage";
+				}
 				else if (currentLocation.Contains("HistoryPage"))
 				{
 					PreviousRoute = "//HistoryPage";
+				}
+				else if (currentLocation.Contains("MultiCapturePage"))
+				{
+					PreviousRoute = "//MultiCapturePage";
 				}
 				else if (currentLocation.Contains("CapturePage"))
 				{
@@ -137,8 +146,12 @@ public partial class AppShell : Shell
 		
 		FlyoutBehavior = isAuthPage ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout;
 		
-		// Actualizar el menú cuando navegamos
-		UpdateFlyoutMenu();
+		// Actualizar el menú cuando navegamos (con un pequeño delay para asegurar que los servicios estén disponibles)
+		_ = Task.Run(async () =>
+		{
+			await Task.Delay(50);
+			MainThread.BeginInvokeOnMainThread(() => UpdateFlyoutMenu());
+		});
 	}
 	
 	/// <summary>
@@ -187,6 +200,19 @@ public partial class AppShell : Shell
 				{
 					var isAdmin = roles.Contains("Admin") || roles.Contains("SuperAdmin");
 					AdminMenu.IsVisible = isAdmin;
+                    
+                    // Mostrar/Ocultar páginas de Admin/Supervisor
+                    var isSupervisor = roles.Contains("Supervisor") || isAdmin;
+                    
+                    UpdateShellContentVisibility("AdminDashboardPage", isAdmin);
+                    UpdateShellContentVisibility("TeamInspectionsPage", isSupervisor);
+				}
+				
+				// Opciones de desarrollo solo para SuperAdmin
+				if (DevMenu != null)
+				{
+					var isSuperAdmin = roles.Contains("SuperAdmin");
+					DevMenu.IsVisible = isSuperAdmin;
 				}
 			}
 		}
@@ -309,6 +335,31 @@ public partial class AppShell : Shell
 			}
 		}
 	}
+
+    /// <summary>
+    /// Actualiza la visibilidad de un ShellContent por su ruta.
+    /// </summary>
+    private void UpdateShellContentVisibility(string route, bool isVisible)
+    {
+        try
+        {
+            foreach (var element in Items)
+            {
+                if (element is ShellItem shellItem)
+                {
+                    UpdateShellContentInItem(shellItem, route, isVisible);
+                }
+                else
+                {
+                    UpdateShellContentRecursive(element, route, isVisible);
+                }
+            }
+        }
+        catch
+        {
+            // Ignorar errores
+        }
+    }
 	
 	// Handlers para los botones del menú
 	private async void OnLoginMenuClicked(object? sender, EventArgs e)
@@ -344,6 +395,41 @@ public partial class AppShell : Shell
 			UpdateFlyoutMenu();
 			await Shell.Current.GoToAsync("//LoginPage");
 			FlyoutIsPresented = false;
+		}
+	}
+	
+	/// <summary>
+	/// Handler para el botón de análisis simple (desarrollo) - Solo visible para SuperAdmin.
+	/// Navega entre CapturePage (análisis simple) y MultiCapturePage (análisis completo).
+	/// </summary>
+	private async void OnDevCaptureMenuClicked(object? sender, EventArgs e)
+	{
+		try
+		{
+			FlyoutIsPresented = false;
+			
+			// Obtener la ruta actual
+			var currentLocation = Shell.Current.CurrentState?.Location?.ToString() ?? "";
+			System.Diagnostics.Debug.WriteLine($"📍 Ubicación actual: {currentLocation}");
+			
+			// Si estamos en CapturePage, navegar a MultiCapturePage
+			// Si estamos en cualquier otra página, navegar a CapturePage
+			if (currentLocation.Contains("CapturePage") && !currentLocation.Contains("MultiCapturePage"))
+			{
+				System.Diagnostics.Debug.WriteLine("🔄 Navegando de CapturePage a MultiCapturePage");
+				await Shell.Current.GoToAsync("//MultiCapturePage");
+			}
+			else
+			{
+				System.Diagnostics.Debug.WriteLine("🔄 Navegando a CapturePage");
+				await Shell.Current.GoToAsync("//CapturePage");
+			}
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"❌ Error al navegar: {ex}");
+			System.Diagnostics.Debug.WriteLine($"   StackTrace: {ex.StackTrace}");
+			await DisplayAlertAsync("Error", "No se pudo navegar a la página solicitada.", "OK");
 		}
 	}
 }

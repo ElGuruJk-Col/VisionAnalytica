@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
+using Microsoft.Maui.ApplicationModel;
 using VisioAnalytica.App.Risk.Models;
 using VisioAnalytica.App.Risk.Services;
 
@@ -26,15 +27,43 @@ public partial class ResultsPage : ContentPage
         FindingsCollection.ItemsSource = Findings;
     }
 
-    protected override void OnAppearing()
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
+        
+        // Esperar un momento para que los controles estén completamente inicializados (especialmente en Android)
+        await Task.Delay(100);
+        
+        // Ocultar botón "Ver Historial" si es SuperAdmin
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            var roles = _authService?.CurrentUserRoles ?? new List<string>();
+            if (roles.Contains("SuperAdmin"))
+            {
+                if (HistoryButton != null)
+                {
+                    HistoryButton.IsVisible = false;
+                }
+            }
+            else
+            {
+                if (HistoryButton != null)
+                {
+                    HistoryButton.IsVisible = true;
+                }
+            }
+        });
+        
         LoadResults();
     }
 
     private async void LoadResults()
     {
-        Findings.Clear();
+        // Asegurar que las actualizaciones de UI se hagan en el hilo principal
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            Findings.Clear();
+        });
         
         // Primero verificar si hay resultados en caché local (de esta instancia de la página)
         AnalysisResult? result = _cachedResult;
@@ -68,27 +97,31 @@ public partial class ResultsPage : ContentPage
         {
             try
             {
-                // Primero, intentar mostrar la imagen desde caché si está disponible
-                if (_cachedImageSource != null)
+                // Actualizar UI en el hilo principal
+                await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    AnalysisImage.Source = _cachedImageSource;
-                    System.Diagnostics.Debug.WriteLine("Imagen mostrada desde caché");
-                }
-                // Si no hay imagen en caché, intentar mostrar desde bytes locales
-                else if (capturedImageBytes != null && capturedImageBytes.Length > 0)
-                {
-                    try
+                    // Primero, intentar mostrar la imagen desde caché si está disponible
+                    if (_cachedImageSource != null && AnalysisImage != null)
                     {
-                        var imageSource = ImageSource.FromStream(() => new MemoryStream(capturedImageBytes));
-                        AnalysisImage.Source = imageSource;
-                        _cachedImageSource = imageSource; // Guardar en caché para futuras navegaciones
-                        System.Diagnostics.Debug.WriteLine("Imagen mostrada desde bytes locales y guardada en caché");
+                        AnalysisImage.Source = _cachedImageSource;
+                        System.Diagnostics.Debug.WriteLine("Imagen mostrada desde caché");
                     }
-                    catch (Exception ex)
+                    // Si no hay imagen en caché, intentar mostrar desde bytes locales
+                    else if (capturedImageBytes != null && capturedImageBytes.Length > 0 && AnalysisImage != null)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Error al mostrar imagen local: {ex.Message}");
+                        try
+                        {
+                            var imageSource = ImageSource.FromStream(() => new MemoryStream(capturedImageBytes));
+                            AnalysisImage.Source = imageSource;
+                            _cachedImageSource = imageSource; // Guardar en caché para futuras navegaciones
+                            System.Diagnostics.Debug.WriteLine("Imagen mostrada desde bytes locales y guardada en caché");
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Error al mostrar imagen local: {ex.Message}");
+                        }
                     }
-                }
+                });
                 
                 // Luego, intentar cargar la imagen desde el servidor (para tener la versión final guardada)
                 // La ImageUrl ahora apunta al endpoint seguro del FileController
@@ -127,10 +160,13 @@ public partial class ResultsPage : ContentPage
                         await LoadImageSecurelyAsync(fullImageUrl);
                         
                         // Guardar la imagen cargada en caché si se cargó exitosamente
-                        if (AnalysisImage.Source != null && _cachedImageSource == null)
+                        await MainThread.InvokeOnMainThreadAsync(() =>
                         {
-                            _cachedImageSource = AnalysisImage.Source;
-                        }
+                            if (AnalysisImage != null && AnalysisImage.Source != null && _cachedImageSource == null)
+                            {
+                                _cachedImageSource = AnalysisImage.Source;
+                            }
+                        });
                     }
                     catch (UriFormatException ex)
                     {
@@ -145,39 +181,57 @@ public partial class ResultsPage : ContentPage
                     }
                 }
 
-                if (result.Hallazgos != null && result.Hallazgos.Count > 0)
+                // Actualizar hallazgos en el hilo principal
+                await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    foreach (var hallazgo in result.Hallazgos)
+                    if (result.Hallazgos != null && result.Hallazgos.Count > 0)
                     {
-                        Findings.Add(new FindingViewModel
+                        foreach (var hallazgo in result.Hallazgos)
                         {
-                            Descripcion = hallazgo.Descripcion,
-                            NivelRiesgo = hallazgo.NivelRiesgo,
-                            AccionCorrectiva = hallazgo.AccionCorrectiva,
-                            AccionPreventiva = hallazgo.AccionPreventiva
-                        });
+                            Findings.Add(new FindingViewModel
+                            {
+                                Descripcion = hallazgo.Descripcion,
+                                NivelRiesgo = hallazgo.NivelRiesgo,
+                                AccionCorrectiva = hallazgo.AccionCorrectiva,
+                                AccionPreventiva = hallazgo.AccionPreventiva
+                            });
+                        }
+                        if (NoFindingsLabel != null)
+                            NoFindingsLabel.IsVisible = false;
                     }
-                    NoFindingsLabel.IsVisible = false;
-                }
-                else
-                {
-                    NoFindingsLabel.IsVisible = true;
-                }
+                    else
+                    {
+                        if (NoFindingsLabel != null)
+                            NoFindingsLabel.IsVisible = true;
+                    }
+                });
             }
             catch (Exception ex)
             {
                 // Error al procesar resultados
-                NoFindingsLabel.Text = $"Error al cargar resultados: {ex.Message}";
-                NoFindingsLabel.TextColor = Colors.Red;
-                NoFindingsLabel.IsVisible = true;
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (NoFindingsLabel != null)
+                    {
+                        NoFindingsLabel.Text = $"Error al cargar resultados: {ex.Message}";
+                        NoFindingsLabel.TextColor = Colors.Red;
+                        NoFindingsLabel.IsVisible = true;
+                    }
+                });
             }
         }
         else
         {
             // No hay datos disponibles (puede ser que se accedió directamente a la página)
-            NoFindingsLabel.Text = "No se encontraron resultados de análisis. Por favor, realiza un análisis primero.";
-            NoFindingsLabel.TextColor = Colors.Red;
-            NoFindingsLabel.IsVisible = true;
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                if (NoFindingsLabel != null)
+                {
+                    NoFindingsLabel.Text = "No se encontraron resultados de análisis. Por favor, realiza un análisis primero.";
+                    NoFindingsLabel.TextColor = Colors.Red;
+                    NoFindingsLabel.IsVisible = true;
+                }
+            });
         }
     }
 
@@ -186,7 +240,7 @@ public partial class ResultsPage : ContentPage
         // Limpiar caché local y del servicio cuando se inicia un nuevo análisis
         ClearCache();
         _navigationDataService.Clear(); // Limpiar también el servicio Singleton
-        await Shell.Current.GoToAsync("//CapturePage");
+        await Shell.Current.GoToAsync("//MultiCapturePage");
     }
     
     /// <summary>
@@ -233,9 +287,17 @@ public partial class ResultsPage : ContentPage
             {
                 var imageBytes = await response.Content.ReadAsByteArrayAsync();
                 var imageSource = ImageSource.FromStream(() => new MemoryStream(imageBytes));
-                AnalysisImage.Source = imageSource;
-                _cachedImageSource = imageSource; // Guardar en caché para futuras navegaciones
-                System.Diagnostics.Debug.WriteLine($"Imagen cargada exitosamente desde el servidor: {imageUrl}");
+                
+                // Actualizar UI en el hilo principal
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    if (AnalysisImage != null)
+                    {
+                        AnalysisImage.Source = imageSource;
+                        _cachedImageSource = imageSource; // Guardar en caché para futuras navegaciones
+                        System.Diagnostics.Debug.WriteLine($"Imagen cargada exitosamente desde el servidor: {imageUrl}");
+                    }
+                });
             }
             else
             {

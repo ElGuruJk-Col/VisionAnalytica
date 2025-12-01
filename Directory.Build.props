@@ -1,0 +1,25 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ===================================================================== -->
+    <!-- CENTRALIZACIÓN DE VERSIONES DE PAQUETES                              -->
+    <!-- ===================================================================== -->
+    <!-- IMPORTANTE: Ejecutar Scripts/CheckVulnerabilities.ps1 mensualmente -->
+    <!-- o antes de cada release para verificar vulnerabilidades.              -->
+    <!-- ===================================================================== -->
+    
+    <!-- JWT Tokens - Versión unificada para todos los proyectos -->
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
+    
+    <!-- Newtonsoft.Json - Requerido por Hangfire, mantener actualizado -->
+    <!-- NOTA: Hangfire 1.8.22 requiere Newtonsoft.Json como dependencia transitiva -->
+    <!-- Esta versión explícita fuerza la versión segura 13.0.3 en todos los proyectos -->
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+</Project>
+

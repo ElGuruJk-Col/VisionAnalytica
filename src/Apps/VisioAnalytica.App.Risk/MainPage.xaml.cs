@@ -26,12 +26,12 @@ public partial class MainPage : ContentPage
 
 	private async void OnCaptureClicked(object? sender, EventArgs e)
 	{
-		await Shell.Current.GoToAsync("//CapturePage");
+		await Shell.Current.GoToAsync("//MultiCapturePage");
 	}
 
 	private async void OnHistoryClicked(object? sender, EventArgs e)
 	{
-		await Shell.Current.GoToAsync("//HistoryPage");
+		await Shell.Current.GoToAsync("//InspectionHistoryPage");
 	}
 
 	private async void OnLogoutClicked(object? sender, EventArgs e)
