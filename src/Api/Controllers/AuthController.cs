@@ -108,13 +108,25 @@ namespace VisioAnalytica.Api.Controllers
         {
             try
             {
-                // Por seguridad, siempre devolvemos éxito aunque el email no exista
                 await _authService.ForgotPasswordAsync(forgotPasswordDto);
                 return Ok(new { message = "Si el email existe, recibirás instrucciones para restablecer tu contraseña." });
             }
-            catch (Exception)
+            catch (InvalidOperationException ex)
             {
-                // Por seguridad, no revelamos errores específicos
+                // Error al generar contraseña temporal (problema técnico)
+                // En desarrollo, devolver el error para debugging. En producción, mensaje genérico.
+                var isDevelopment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";
+                if (isDevelopment)
+                {
+                    return StatusCode(500, new { message = $"Error técnico: {ex.Message}" });
+                }
+                return StatusCode(500, new { message = "No se pudo procesar la solicitud. Por favor, contacta al administrador." });
+            }
+            catch (Exception ex)
+            {
+                // Por seguridad, no revelamos si el email existe o no
+                // Pero logueamos el error para debugging
+                System.Diagnostics.Debug.WriteLine($"Error inesperado en forgot-password: {ex}");
                 return Ok(new { message = "Si el email existe, recibirás instrucciones para restablecer tu contraseña." });
             }
         }

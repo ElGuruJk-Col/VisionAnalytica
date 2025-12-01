@@ -6,47 +6,98 @@
 
     <ScrollView>
         <VerticalStackLayout
-            Padding="30,40"
-            Spacing="30">
+            Padding="20,30"
+            Spacing="24">
             
             <Label
                 Text="VisioAnalytica Risk"
                 Style="{StaticResource Headline}"
                 SemanticProperties.HeadingLevel="Level1"
-                HorizontalOptions="Center" />
+                HorizontalOptions="Center"
+                Margin="0,0,0,8" />
 
             <Label
                 Text="Análisis de Riesgos con IA"
                 Style="{StaticResource SubHeadline}"
                 SemanticProperties.HeadingLevel="Level2"
                 HorizontalOptions="Center"
-                TextColor="Gray" />
-
-            <Image
-                Source="dotnet_bot.png"
-                HeightRequest="200"
-                Aspect="AspectFit"
-                HorizontalOptions="Center"
-                Margin="0,20,0,20" />
-
-            <Button
-                x:Name="CaptureButton"
-                Text="Nueva Inspección"
-                Clicked="OnCaptureClicked"
-                BackgroundColor="#512BD4"
-                TextColor="White"
-                CornerRadius="10"
-                HeightRequest="50"
-                Margin="0,20,0,10" />
-
-            <Button
-                x:Name="HistoryButton"
-                Text="Ver Historial"
-                Clicked="OnHistoryClicked"
-                BackgroundColor="Transparent"
-                TextColor="#512BD4"
-                HeightRequest="50"
-                Margin="0,0,0,20" />
+                TextColor="{StaticResource Gray600}"
+                Margin="0,0,0,24" />
+            
+            <!-- Card de Nueva Inspección -->
+            <Border Stroke="{StaticResource Primary}"
+                    StrokeThickness="2"
+                    StrokeShape="RoundRectangle 16"
+                    Padding="24"
+                    BackgroundColor="{StaticResource Gray50}"
+                    Margin="0,0,0,16">
+                <VerticalStackLayout Spacing="16">
+                    <HorizontalStackLayout>
+                        <Label Text="📸"
+                               FontSize="32"
+                               VerticalOptions="Center" />
+                        <Label Text="Nueva Inspección"
+                               FontSize="20"
+                               FontAttributes="Bold"
+                               TextColor="{StaticResource Gray900}"
+                               VerticalOptions="Center"
+                               Margin="12,0,0,0" />
+                    </HorizontalStackLayout>
+                    
+                    <Label Text="Captura múltiples fotos y analízalas con IA para identificar riesgos laborales"
+                           FontSize="14"
+                           TextColor="{StaticResource Gray600}"
+                           Margin="0,0,0,12" />
+                    
+                    <Button x:Name="CaptureButton"
+                            Text="Iniciar Inspección"
+                            Clicked="OnCaptureClicked"
+                            BackgroundColor="{StaticResource Primary}"
+                            TextColor="White"
+                            CornerRadius="10"
+                            HeightRequest="56"
+                            FontSize="18"
+                            FontAttributes="Bold" />
+                </VerticalStackLayout>
+            </Border>
+            
+            <!-- Card de Historial -->
+            <Border Stroke="{StaticResource Gray300}"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 16"
+                    Padding="24"
+                    BackgroundColor="White"
+                    Margin="0,0,0,16">
+                <VerticalStackLayout Spacing="16">
+                    <HorizontalStackLayout>
+                        <Label Text="📋"
+                               FontSize="32"
+                               VerticalOptions="Center" />
+                        <Label Text="Historial de Inspecciones"
+                               FontSize="20"
+                               FontAttributes="Bold"
+                               TextColor="{StaticResource Gray900}"
+                               VerticalOptions="Center"
+                               Margin="12,0,0,0" />
+                    </HorizontalStackLayout>
+                    
+                    <Label Text="Revisa inspecciones anteriores, sus resultados y el estado de los análisis"
+                           FontSize="14"
+                           TextColor="{StaticResource Gray600}"
+                           Margin="0,0,0,12" />
+                    
+                    <Button x:Name="HistoryButton"
+                            Text="Ver Historial"
+                            Clicked="OnHistoryClicked"
+                            BackgroundColor="Transparent"
+                            TextColor="{StaticResource Primary}"
+                            BorderColor="{StaticResource Primary}"
+                            BorderWidth="2"
+                            CornerRadius="10"
+                            HeightRequest="56"
+                            FontSize="18" />
+                </VerticalStackLayout>
+            </Border>
 
             <Button
                 x:Name="LogoutButton"
@@ -54,7 +105,8 @@
                 Clicked="OnLogoutClicked"
                 BackgroundColor="Transparent"
                 TextColor="Red"
-                HeightRequest="40" />
+                HeightRequest="44"
+                Margin="0,8,0,0" />
 
         </VerticalStackLayout>
     </ScrollView>

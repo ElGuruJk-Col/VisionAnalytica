@@ -311,6 +311,42 @@ namespace VisioAnalytica.Infrastructure.Migrations
                     b.ToTable("Organizations");
                 });
 
+            modelBuilder.Entity("VisioAnalytica.Core.Models.Photo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AnalysisInspectionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CapturedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ImageUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("InspectionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsAnalyzed")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AnalysisInspectionId");
+
+                    b.HasIndex("InspectionId");
+
+                    b.ToTable("Photos");
+                });
+
             modelBuilder.Entity("VisioAnalytica.Core.Models.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -531,6 +567,24 @@ namespace VisioAnalytica.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("VisioAnalytica.Core.Models.Photo", b =>
+                {
+                    b.HasOne("VisioAnalytica.Core.Models.Inspection", "AnalysisInspection")
+                        .WithMany()
+                        .HasForeignKey("AnalysisInspectionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("VisioAnalytica.Core.Models.Inspection", "Inspection")
+                        .WithMany("Photos")
+                        .HasForeignKey("InspectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AnalysisInspection");
+
+                    b.Navigation("Inspection");
+                });
+
             modelBuilder.Entity("VisioAnalytica.Core.Models.User", b =>
                 {
                     b.HasOne("VisioAnalytica.Core.Models.Organization", "Organization")
@@ -557,6 +611,8 @@ namespace VisioAnalytica.Infrastructure.Migrations
             modelBuilder.Entity("VisioAnalytica.Core.Models.Inspection", b =>
                 {
                     b.Navigation("Findings");
+
+                    b.Navigation("Photos");
                 });
 
             modelBuilder.Entity("VisioAnalytica.Core.Models.Organization", b =>

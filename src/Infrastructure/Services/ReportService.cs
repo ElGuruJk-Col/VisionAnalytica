@@ -76,10 +76,12 @@ namespace VisioAnalytica.Infrastructure.Services
             var summaryList = inspections.Select(i => new InspectionSummaryDto
             (
                 Id: i.Id,
-                AnalysisDate: i.AnalysisDate,
-                ImageUrl: i.ImageUrl,
-                UserName: i.User.UserName ?? i.User.Email ?? $"Usuario {i.UserId}", // UserName real del usuario
-                TotalFindings: i.Findings.Count
+                AnalysisDate: i.AnalysisDate != default ? i.AnalysisDate : i.StartedAt, // Usar StartedAt si AnalysisDate no está establecido
+                ImageUrl: i.ImageUrl ?? string.Empty,
+                UserName: i.User?.UserName ?? i.User?.Email ?? $"Usuario {i.UserId}", // Manejar User null
+                AffiliatedCompanyName: i.AffiliatedCompany?.Name ?? "N/A",
+                Status: i.Status ?? "Draft",
+                TotalFindings: i.Findings?.Count ?? 0
             )).ToList();
 
             return summaryList;

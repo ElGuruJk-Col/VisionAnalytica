@@ -46,7 +46,7 @@ public partial class LoginPage : ContentPage
     // Obtener ApiClient desde DI si no está disponible
     private IApiClient GetApiClient()
     {
-        if (_apiClient != null)
+          if (_apiClient != null)
             return _apiClient;
 
         // Intentar obtener desde el contenedor de DI
@@ -65,7 +65,7 @@ public partial class LoginPage : ContentPage
     [SupportedOSPlatform("maccatalyst")]
     [SupportedOSPlatform("windows")]
     private async void OnLoginClicked(object? sender, EventArgs e)
-    {
+     {
         try
         {
             // Validación básica
@@ -155,13 +155,27 @@ public partial class LoginPage : ContentPage
         catch (ApiException ex)
         {
             // El ApiException ya contiene un mensaje amigable
+            System.Diagnostics.Debug.WriteLine($"❌ ApiException en login: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"   StatusCode: {ex.StatusCode}");
+            System.Diagnostics.Debug.WriteLine($"   StackTrace: {ex.StackTrace}");
+            if (ex.InnerException != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"   InnerException: {ex.InnerException.Message}");
+            }
             ShowError(ex.Message);
         }
         catch (Exception ex)
         {
             // Para errores inesperados, mostrar un mensaje genérico
-            ShowError("Ocurrió un error inesperado. Por favor, intenta nuevamente.");
-            System.Diagnostics.Debug.WriteLine($"Error inesperado en login: {ex}");
+            System.Diagnostics.Debug.WriteLine($"❌ Error inesperado en login: {ex}");
+            System.Diagnostics.Debug.WriteLine($"   Tipo: {ex.GetType().Name}");
+            System.Diagnostics.Debug.WriteLine($"   Mensaje: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"   StackTrace: {ex.StackTrace}");
+            if (ex.InnerException != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"   InnerException: {ex.InnerException.Message}");
+            }
+            ShowError($"Ocurrió un error inesperado: {ex.Message}");
         }
         finally
         {
@@ -206,7 +220,8 @@ public partial class LoginPage : ContentPage
     private void OnTogglePasswordClicked(object? sender, EventArgs e)
     {
         PasswordEntry.IsPassword = !PasswordEntry.IsPassword;
-        TogglePasswordButton.Text = PasswordEntry.IsPassword ? "👁" : "🔒";
+        // Iconos monocromáticos modernos: ● (ojo cerrado) y ○ (ojo abierto)
+        TogglePasswordButton.Text = PasswordEntry.IsPassword ? "●" : "○";
     }
 
     protected override void OnAppearing()

@@ -232,9 +232,11 @@ namespace VisioAnalytica.Infrastructure.Services
             var resetResult = await _userManager.ResetPasswordAsync(user, resetToken, temporaryPassword);
             if (!resetResult.Succeeded)
             {
-                // Si falla el reset, loguear el error pero no revelar detalles
-                Console.WriteLine($"[WARNING] No se pudo resetear la contraseña para {user.Email}");
-                return true; // Por seguridad, siempre devolvemos éxito
+                // Si falla el reset, loguear el error con detalles para debugging
+                var errors = string.Join(", ", resetResult.Errors.Select(e => $"{e.Code}: {e.Description}"));
+                Console.WriteLine($"[WARNING] No se pudo resetear la contraseña para {user.Email}. Errores: {errors}");
+                // Lanzar excepción para que el controlador pueda manejarla apropiadamente
+                throw new InvalidOperationException($"No se pudo generar la contraseña temporal. Errores: {errors}");
             }
 
             // Marcar que el usuario debe cambiar su contraseña en el próximo login
@@ -262,26 +264,33 @@ namespace VisioAnalytica.Infrastructure.Services
         }
 
         /// <summary>
-        /// Genera una contraseña temporal segura.
+        /// Genera una contraseña temporal segura que cumple con la política de contraseñas:
+        /// - Mínimo 8 caracteres
+        /// - Requiere dígitos
+        /// - Requiere minúsculas
+        /// - Requiere mayúsculas
+        /// - Requiere caracteres no alfanuméricos
         /// </summary>
         private static string GenerateTemporaryPassword()
         {
-            // Generar una contraseña de 12 caracteres con mayúsculas, minúsculas y números
+            // Generar una contraseña de 12 caracteres con mayúsculas, minúsculas, números y caracteres especiales
             const string upperCase = "ABCDEFGHJKLMNPQRSTUVWXYZ";
             const string lowerCase = "abcdefghijkmnpqrstuvwxyz";
             const string numbers = "23456789";
-            const string allChars = upperCase + lowerCase + numbers;
+            const string specialChars = "!@#$%&*";
+            const string allChars = upperCase + lowerCase + numbers + specialChars;
             
             var random = new Random();
             var password = new char[12];
             
-            // Asegurar al menos un carácter de cada tipo
+            // Asegurar al menos un carácter de cada tipo requerido
             password[0] = upperCase[random.Next(upperCase.Length)];
             password[1] = lowerCase[random.Next(lowerCase.Length)];
             password[2] = numbers[random.Next(numbers.Length)];
+            password[3] = specialChars[random.Next(specialChars.Length)];
             
             // Llenar el resto con caracteres aleatorios
-            for (int i = 3; i < password.Length; i++)
+            for (int i = 4; i < password.Length; i++)
             {
                 password[i] = allChars[random.Next(allChars.Length)];
             }

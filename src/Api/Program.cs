@@ -1,6 +1,7 @@
 // En: src/Api/Program.cs
 // (VERSIÓN 5.0 - REFACTORIZADA!)
 
+using Hangfire;
 using VisioAnalytica.Api.Extensions; // <-- 1. ¡IMPORTAMOS NUESTRA "CAJA DE HERRAMIENTAS"!
 using Microsoft.Extensions.FileProviders;
 
@@ -68,58 +69,28 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-// 2. Redirección HTTPS (seguridad) - Solo si hay HTTPS configurado
-// Verificamos si hay HTTPS disponible para evitar warnings cuando solo hay HTTP
-// El warning aparece cuando UseHttpsRedirection() se ejecuta sin configuración HTTPS
-var hasHttpsPort = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("HTTPS_PORT")) ||
-                   !string.IsNullOrEmpty(app.Configuration["HTTPS_PORT"]);
-
-// Solo usar HTTPS redirection si hay HTTPS configurado
-// (Las opciones ya se configuraron antes de construir la app)
-if (hasHttpsPort || hasHttpsInUrls)
+// 2. Redirección HTTPS (seguridad) - DESHABILITADA en desarrollo para permitir conexiones desde dispositivos físicos
+// En desarrollo, permitimos HTTP para que funcione desde dispositivos móviles
+// En producción, se habilitará HTTPS redirection
+if (!app.Environment.IsDevelopment())
 {
-    if (app.Environment.IsDevelopment())
-    {
-        // En desarrollo: redirigir a HTTPS EXCEPTO para Swagger y endpoints de Auth (que deben funcionar en ambos)
-        app.Use(async (context, next) =>
-        {
-            // Permitir acceso HTTP a Swagger y endpoints de Auth en desarrollo (para que funcione desde ambos esquemas)
-            if (context.Request.Path.StartsWithSegments("/swagger") ||
-                context.Request.Path.StartsWithSegments("/api/Auth"))
-            {
-                await next();
-                return;
-            }
-            
-            // Para todas las demás rutas, redirigir HTTP a HTTPS
-            if (!context.Request.IsHttps && httpsPort.HasValue)
-            {
-                var host = context.Request.Host.Host;
-                // Si es 0.0.0.0, usar localhost para la redirección
-                if (host == "0.0.0.0" || host == "::")
-                {
-                    host = "localhost";
-                }
-                
-                var httpsUrl = $"https://{host}:{httpsPort.Value}{context.Request.PathBase}{context.Request.Path}{context.Request.QueryString}";
-                context.Response.Redirect(httpsUrl, permanent: false);
-                return;
-            }
-            
-            await next();
-        });
-    }
-    else
-    {
-        // En producción, siempre redirigir a HTTPS
-        app.UseHttpsRedirection();
-    }
+    // Solo en producción: redirigir a HTTPS
+    app.UseHttpsRedirection();
 }
 
 // 2.5. Habilitar CORS (DEBE ir antes de UseAuthentication)
 if (app.Environment.IsDevelopment())
 {
     app.UseCors("DevelopmentCors");
+}
+
+// 2.7. Habilitar Hangfire Dashboard (solo en desarrollo o para admins)
+if (app.Environment.IsDevelopment())
+{
+    app.UseHangfireDashboard("/hangfire", new DashboardOptions
+    {
+        Authorization = [] // En desarrollo, permitir acceso sin restricciones
+    });
 }
 
 // 2.6. Habilitar archivos estáticos (para servir imágenes de wwwroot/uploads)

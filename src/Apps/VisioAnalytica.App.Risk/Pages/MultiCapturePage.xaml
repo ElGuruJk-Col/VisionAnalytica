@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:converters="clr-namespace:VisioAnalytica.App.Risk.Converters"
+             x:Class="VisioAnalytica.App.Risk.Pages.MultiCapturePage"
+             Title="Nueva Inspección">
+    
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:BoolToBorderColorConverter x:Key="BoolToBorderColorConverter" />
+            <converters:BoolToBorderThicknessConverter x:Key="BoolToBorderThicknessConverter" />
+            <converters:BoolToCheckboxBgConverter x:Key="BoolToCheckboxBgConverter" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+    
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="16">
+            
+            <!-- Header -->
+            <Label Text="Nueva Inspección"
+                   FontSize="24"
+                   FontAttributes="Bold"
+                   TextColor="{StaticResource Gray900}"
+                   Margin="0,0,0,8" />
+            
+            <!-- Company Selection - Mejorado para mayor visibilidad -->
+            <Border Stroke="{StaticResource Primary}"
+                    StrokeThickness="2"
+                    StrokeShape="RoundRectangle 12"
+                    Padding="16"
+                    Margin="0,0,0,16"
+                    BackgroundColor="{StaticResource Gray50}">
+                <VerticalStackLayout Spacing="12">
+                    <HorizontalStackLayout>
+                        <Label Text="🏢"
+                               FontSize="24"
+                               VerticalOptions="Center" />
+                        <Label Text="Empresa Cliente a Auditar"
+                               FontSize="16"
+                               FontAttributes="Bold"
+                               TextColor="{StaticResource Gray900}"
+                               VerticalOptions="Center"
+                               Margin="8,0,0,0" />
+                    </HorizontalStackLayout>
+                    
+                    <Label Text="Selecciona la empresa antes de capturar fotos"
+                           FontSize="12"
+                           TextColor="{StaticResource Gray600}"
+                           Margin="0,0,0,8" />
+                    
+                    <Border Stroke="{StaticResource Gray300}"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 8"
+                            BackgroundColor="White">
+                        <Picker x:Name="CompanyPicker"
+                                ItemDisplayBinding="{Binding Name}"
+                                SelectedIndexChanged="OnCompanySelected"
+                                BackgroundColor="White"
+                                TextColor="{StaticResource Gray900}"
+                                HeightRequest="52"
+                                FontSize="16"
+                                Title="Selecciona una empresa" />
+                    </Border>
+                    
+                    <!-- Indicador visual cuando no hay empresa seleccionada -->
+                    <Label x:Name="CompanyWarningLabel"
+                           Text="⚠️ Debes seleccionar una empresa antes de capturar fotos"
+                           FontSize="12"
+                           TextColor="{StaticResource Warning}"
+                           IsVisible="False"
+                           Margin="0,4,0,0" />
+                </VerticalStackLayout>
+            </Border>
+            
+            <!-- Captured Photos Section -->
+            <VerticalStackLayout Spacing="12">
+                <HorizontalStackLayout Spacing="12" 
+                                     VerticalOptions="Center"
+                                     Margin="0,8,0,8">
+                    <Label Text="Fotos Capturadas"
+                           FontSize="16"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource Gray900}"
+                           VerticalOptions="Center" />
+                    <Border Stroke="{StaticResource Gray300}"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 8"
+                            Padding="8,4"
+                            BackgroundColor="{StaticResource Gray50}"
+                            VerticalOptions="Center">
+                        <HorizontalStackLayout Spacing="8" 
+                                             VerticalOptions="Center">
+                            <CheckBox x:Name="SelectAllCheckBox"
+                                      CheckedChanged="OnSelectAllChanged"
+                                      Color="{StaticResource Primary}"
+                                      IsEnabled="False"
+                                      VerticalOptions="Center" />
+                            <Label Text="Seleccionar todas"
+                                   FontSize="14"
+                                   TextColor="{StaticResource Gray700}"
+                                   VerticalOptions="Center">
+                                <Label.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnSelectAllLabelTapped" />
+                                </Label.GestureRecognizers>
+                            </Label>
+                        </HorizontalStackLayout>
+                    </Border>
+                </HorizontalStackLayout>
+                
+                <CollectionView x:Name="PhotosCollection"
+                                SelectionMode="None">
+                    <CollectionView.ItemsLayout>
+                        <GridItemsLayout Orientation="Vertical"
+                                        Span="2"
+                                        HorizontalItemSpacing="8"
+                                        VerticalItemSpacing="8" />
+                    </CollectionView.ItemsLayout>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Border Stroke="{Binding IsSelected, Converter={StaticResource BoolToBorderColorConverter}}"
+                                    StrokeThickness="{Binding IsSelected, Converter={StaticResource BoolToBorderThicknessConverter}}"
+                                    StrokeShape="RoundRectangle 12"
+                                    Padding="8"
+                                    BackgroundColor="White"
+                                    Margin="4">
+                                <Grid>
+                                    <Image Source="{Binding Thumbnail}"
+                                           Aspect="AspectFill"
+                                           HeightRequest="140" />
+                                    
+                                    <!-- Overlay cuando está seleccionada -->
+                                    <BoxView BackgroundColor="#40000000"
+                                             IsVisible="{Binding IsSelected}"
+                                             Opacity="0.3" />
+                                    
+                                    <!-- Checkbox más visible con tap gesture -->
+                                    <Border BackgroundColor="{Binding IsSelected, Converter={StaticResource BoolToCheckboxBgConverter}}"
+                                            StrokeThickness="2"
+                                            Stroke="{Binding IsSelected, Converter={StaticResource BoolToBorderColorConverter}}"
+                                            StrokeShape="RoundRectangle 20"
+                                            WidthRequest="40"
+                                            HeightRequest="40"
+                                            HorizontalOptions="End"
+                                            VerticalOptions="Start"
+                                            Margin="8">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="OnPhotoTapped" CommandParameter="{Binding .}" />
+                                        </Border.GestureRecognizers>
+                                        <Label Text="✓"
+                                               FontSize="20"
+                                               FontAttributes="Bold"
+                                               TextColor="White"
+                                               HorizontalOptions="Center"
+                                               VerticalOptions="Center"
+                                               IsVisible="{Binding IsSelected}" />
+                                    </Border>
+                                    
+                                    <!-- Timestamp mejorado -->
+                                    <Label Text="{Binding CapturedAt, StringFormat='{0:HH:mm}'}"
+                                           FontSize="11"
+                                           FontAttributes="Bold"
+                                           TextColor="White"
+                                           BackgroundColor="#80000000"
+                                           HorizontalOptions="End"
+                                           VerticalOptions="End"
+                                           Margin="8"
+                                           Padding="6,3" />
+                                    
+                                    <!-- Tap en toda la imagen para seleccionar -->
+                                    <Grid.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnPhotoTapped" CommandParameter="{Binding .}" />
+                                    </Grid.GestureRecognizers>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                    <CollectionView.EmptyView>
+                        <VerticalStackLayout HorizontalOptions="Center"
+                                           VerticalOptions="Center"
+                                           Spacing="8"
+                                           Padding="20">
+                            <Label Text="📷"
+                                   FontSize="48"
+                                   HorizontalOptions="Center" />
+                            <Label Text="No hay fotos capturadas"
+                                   FontSize="14"
+                                   TextColor="{StaticResource Gray600}"
+                                   HorizontalOptions="Center" />
+                            <Label Text="Toma una foto para comenzar"
+                                   FontSize="12"
+                                   TextColor="{StaticResource Gray500}"
+                                   HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                    </CollectionView.EmptyView>
+                </CollectionView>
+            </VerticalStackLayout>
+            
+            <!-- Action Buttons -->
+            <VerticalStackLayout Spacing="12" Margin="0,16,0,0">
+                <Button x:Name="CaptureButton"
+                        Text="Tomar Foto"
+                        Clicked="OnCaptureClicked"
+                        BackgroundColor="{StaticResource Primary}"
+                        TextColor="White"
+                        CornerRadius="8"
+                        HeightRequest="48"
+                        FontSize="16" />
+                
+                <Button x:Name="AnalyzeButton"
+                        Text="Analizar Seleccionadas (0)"
+                        Clicked="OnAnalyzeClicked"
+                        BackgroundColor="{StaticResource Secondary}"
+                        TextColor="White"
+                        CornerRadius="8"
+                        HeightRequest="48"
+                        FontSize="16"
+                        IsEnabled="False" />
+            </VerticalStackLayout>
+            
+            <!-- Status -->
+            <Border x:Name="StatusBorder"
+                    Stroke="{StaticResource Primary}"
+                    StrokeThickness="2"
+                    StrokeShape="RoundRectangle 12"
+                    Padding="16"
+                    Margin="0,8,0,0"
+                    BackgroundColor="{StaticResource Gray50}"
+                    IsVisible="False">
+                <VerticalStackLayout Spacing="8">
+                    <Label x:Name="StatusLabel"
+                           FontSize="14"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource Gray900}"
+                           HorizontalOptions="Center" />
+                    <Label x:Name="StatusSubLabel"
+                           FontSize="12"
+                           TextColor="{StaticResource Gray600}"
+                           HorizontalOptions="Center"
+                           IsVisible="False" />
+                </VerticalStackLayout>
+            </Border>
+            
+            <!-- Loading Indicator -->
+            <ActivityIndicator x:Name="LoadingIndicator"
+                               IsRunning="False"
+                               IsVisible="False"
+                               Color="{StaticResource Primary}"
+                               Margin="0,8,0,0" />
+            
+        </VerticalStackLayout>
+    </ScrollView>
+    
+</ContentPage>
+

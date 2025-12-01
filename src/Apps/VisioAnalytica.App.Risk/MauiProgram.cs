@@ -28,6 +28,7 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IAuthService, AuthService>();
 		builder.Services.AddSingleton<IAnalysisService, AnalysisService>();
 		builder.Services.AddSingleton<INavigationDataService, NavigationDataService>();
+		builder.Services.AddSingleton<INotificationService, NotificationService>();
 
 		// Registrar páginas (LoginPage necesita IApiClient también)
 		builder.Services.AddTransient<Pages.LoginPage>(sp => 
@@ -35,14 +36,32 @@ public static class MauiProgram
 				sp.GetRequiredService<IAuthService>(),
 				sp.GetRequiredService<IApiClient>()));
 		builder.Services.AddTransient<Pages.RegisterPage>();
+		// Mantener CapturePage para compatibilidad (puede ser eliminada después)
 		builder.Services.AddTransient<Pages.CapturePage>(sp => 
 			new Pages.CapturePage(
 				sp.GetRequiredService<IAnalysisService>(),
 				sp.GetRequiredService<INavigationDataService>(),
 				sp.GetRequiredService<IApiClient>(),
 				sp.GetRequiredService<IAuthService>()));
+		
+		// Nuevas páginas con diseño moderno
+		builder.Services.AddTransient<Pages.MultiCapturePage>(sp => 
+			new Pages.MultiCapturePage(
+				sp.GetRequiredService<IApiClient>(),
+				sp.GetRequiredService<IAuthService>(),
+				sp.GetRequiredService<INotificationService>()));
+		builder.Services.AddTransient<Pages.InspectionHistoryPage>(sp => 
+			new Pages.InspectionHistoryPage(
+				sp.GetRequiredService<IApiClient>(),
+				sp.GetRequiredService<IAuthService>(),
+				sp.GetRequiredService<INotificationService>()));
+		builder.Services.AddTransient<Pages.InspectionDetailsPage>(sp => 
+			new Pages.InspectionDetailsPage(
+				sp.GetRequiredService<IApiClient>(),
+				sp.GetRequiredService<IAuthService>()));
+		
 		builder.Services.AddTransient<Pages.ResultsPage>();
-		builder.Services.AddTransient<Pages.HistoryPage>();
+		builder.Services.AddTransient<Pages.HistoryPage>(); // Mantener para compatibilidad
 		builder.Services.AddTransient<Pages.ForgotPasswordPage>();
 		builder.Services.AddTransient<Pages.ChangePasswordPage>();
 		builder.Services.AddTransient<Pages.ResetPasswordPage>();
@@ -64,22 +83,20 @@ public static class MauiProgram
 		Routing.RegisterRoute("ChangePasswordPage", new DependencyInjectionRouteFactory<Pages.ChangePasswordPage>(serviceProvider));
 		Routing.RegisterRoute("ResetPasswordPage", new DependencyInjectionRouteFactory<Pages.ResetPasswordPage>(serviceProvider));
 		Routing.RegisterRoute("CapturePage", new DependencyInjectionRouteFactory<Pages.CapturePage>(serviceProvider));
+		Routing.RegisterRoute("MultiCapturePage", new DependencyInjectionRouteFactory<Pages.MultiCapturePage>(serviceProvider));
 		Routing.RegisterRoute("ResultsPage", new DependencyInjectionRouteFactory<Pages.ResultsPage>(serviceProvider));
 		Routing.RegisterRoute("HistoryPage", new DependencyInjectionRouteFactory<Pages.HistoryPage>(serviceProvider));
+		Routing.RegisterRoute("InspectionHistoryPage", new DependencyInjectionRouteFactory<Pages.InspectionHistoryPage>(serviceProvider));
+		Routing.RegisterRoute("InspectionDetailsPage", new DependencyInjectionRouteFactory<Pages.InspectionDetailsPage>(serviceProvider));
 		Routing.RegisterRoute("MainPage", new DependencyInjectionRouteFactory<MainPage>(serviceProvider));
 		
 		return app;
 	}
 	
 	// Factory personalizado para resolver páginas desde DI
-	private class DependencyInjectionRouteFactory<T> : RouteFactory where T : Page
+	private class DependencyInjectionRouteFactory<T>(IServiceProvider serviceProvider) : RouteFactory where T : Page
 	{
-		private readonly IServiceProvider _serviceProvider;
-		
-		public DependencyInjectionRouteFactory(IServiceProvider serviceProvider)
-		{
-			_serviceProvider = serviceProvider;
-		}
+		private readonly IServiceProvider _serviceProvider = serviceProvider;
 		
 		public override Element GetOrCreate()
 		{

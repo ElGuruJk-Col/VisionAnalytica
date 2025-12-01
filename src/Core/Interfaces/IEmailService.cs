@@ -94,6 +94,12 @@ namespace VisioAnalytica.Core.Interfaces
         /// Lista de emails en copia oculta (BCC).
         /// </summary>
         public List<string>? Bcc { get; set; }
+
+        /// <summary>
+        /// Lista de adjuntos.
+        /// Clave: Nombre del archivo, Valor: Contenido en bytes.
+        /// </summary>
+        public Dictionary<string, byte[]>? Attachments { get; set; }
     }
 }
 

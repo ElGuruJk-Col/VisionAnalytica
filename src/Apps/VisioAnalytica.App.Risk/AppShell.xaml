@@ -76,6 +76,27 @@
                     <!-- Aquí se pueden agregar más opciones de administración en el futuro -->
                 </VerticalStackLayout>
                 
+                <!-- Opciones de Desarrollo - Solo para SuperAdmin -->
+                <VerticalStackLayout x:Name="DevMenu" Spacing="10" IsVisible="False">
+                    <BoxView 
+                        HeightRequest="1"
+                        Color="LightGray"
+                        Margin="0,10,0,10" />
+                    <Label 
+                        Text="Desarrollo (Interno)"
+                        FontSize="14"
+                        FontAttributes="Bold"
+                        TextColor="Gray" />
+                    <Button 
+                        x:Name="DevCaptureButton"
+                        Text="Análisis Simple (Dev)"
+                        Clicked="OnDevCaptureMenuClicked"
+                        BackgroundColor="Transparent"
+                        TextColor="#FF9800"
+                        HorizontalOptions="Start"
+                        Padding="0" />
+                </VerticalStackLayout>
+                
                 <!-- Separador visual -->
                 <BoxView 
                     HeightRequest="1"
@@ -109,14 +130,14 @@
 
         <ShellContent
             Title="Capturar"
-            ContentTemplate="{DataTemplate pages:CapturePage}"
-            Route="CapturePage"
+            ContentTemplate="{DataTemplate pages:MultiCapturePage}"
+            Route="MultiCapturePage"
             Icon="camera.png" />
 
         <ShellContent
             Title="Historial"
-            ContentTemplate="{DataTemplate pages:HistoryPage}"
-            Route="HistoryPage"
+            ContentTemplate="{DataTemplate pages:InspectionHistoryPage}"
+            Route="InspectionHistoryPage"
             Icon="history.png" />
     </TabBar>
 
@@ -149,5 +170,32 @@
         Title="Resultados"
         ContentTemplate="{DataTemplate pages:ResultsPage}"
         Route="ResultsPage" />
+
+    <!-- Inspection Details Page -->
+    <ShellContent
+        Title="Detalles de Inspección"
+        ContentTemplate="{DataTemplate pages:InspectionDetailsPage}"
+        Route="InspectionDetailsPage" />
+
+    <!-- Admin Dashboard Page -->
+    <ShellContent
+        Title="Dashboard"
+        ContentTemplate="{DataTemplate pages:AdminDashboardPage}"
+        Route="AdminDashboardPage"
+        FlyoutItemIsVisible="False" />
+
+    <!-- Team Inspections Page -->
+    <ShellContent
+        Title="Historial de Equipo"
+        ContentTemplate="{DataTemplate pages:TeamInspectionsPage}"
+        Route="TeamInspectionsPage"
+        FlyoutItemIsVisible="False" />
+
+    <!-- Capture Page (Dev - Solo SuperAdmin) -->
+    <ShellContent
+        Title="Análisis Simple (Dev)"
+        ContentTemplate="{DataTemplate pages:CapturePage}"
+        Route="CapturePage"
+        FlyoutItemIsVisible="False" />
 
 </Shell>

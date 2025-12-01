@@ -15,25 +15,72 @@
 
             <CollectionView 
                 x:Name="HistoryCollection"
-                ItemsSource="{Binding Inspections}">
+                ItemsSource="{Binding InspectionGroups}"
+                IsGrouped="True"
+                SelectionMode="Single"
+                SelectionChanged="OnSelectionChanged">
+                
+                <CollectionView.GroupHeaderTemplate>
+                    <DataTemplate>
+                        <Label Text="{Binding Name}"
+                               FontSize="18"
+                               FontAttributes="Bold"
+                               TextColor="{StaticResource Primary}"
+                               Padding="0,10,0,10" />
+                    </DataTemplate>
+                </CollectionView.GroupHeaderTemplate>
+
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
                         <Border 
-                            Stroke="Gray"
-                            StrokeThickness="1"
+                            Stroke="Transparent"
+                            StrokeThickness="0"
                             StrokeShape="RoundRectangle 10"
                             Padding="15"
-                            Margin="0,0,0,10">
-                            <VerticalStackLayout Spacing="5">
-                                <Label 
-                                    Text="{Binding Date}"
+                            Margin="0,0,0,10"
+                            BackgroundColor="White">
+                            <Border.Shadow>
+                                <Shadow Brush="Black" Offset="2,2" Radius="5" Opacity="0.1"/>
+                            </Border.Shadow>
+                            
+                            <Grid ColumnDefinitions="*, Auto" RowDefinitions="Auto, Auto, Auto">
+                                <!-- Company Name -->
+                                <Label Grid.Row="0" Grid.Column="0"
+                                    Text="{Binding CompanyName}"
                                     FontSize="16"
-                                    FontAttributes="Bold" />
-                                <Label 
-                                    Text="{Binding FindingsCount, StringFormat='Hallazgos: {0}'}"
-                                    FontSize="14"
-                                    TextColor="Gray" />
-                            </VerticalStackLayout>
+                                    FontAttributes="Bold"
+                                    TextColor="{StaticResource Gray900}" />
+                                
+                                <!-- Status Badge -->
+                                <Border Grid.Row="0" Grid.Column="1"
+                                        StrokeShape="RoundRectangle 4"
+                                        BackgroundColor="{Binding StatusColor}"
+                                        Padding="8,2"
+                                        HorizontalOptions="End">
+                                    <Label Text="{Binding Status}"
+                                           FontSize="10"
+                                           TextColor="White"
+                                           FontAttributes="Bold"/>
+                                </Border>
+
+                                <!-- Date -->
+                                <Label Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                    Text="{Binding Date}"
+                                    FontSize="12"
+                                    TextColor="{StaticResource Gray600}"
+                                    Margin="0,4,0,0" />
+
+                                <!-- Findings Count -->
+                                <HorizontalStackLayout Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" 
+                                                     Spacing="5" Margin="0,8,0,0">
+                                    <Label Text="⚠️" FontSize="14" VerticalOptions="Center"/>
+                                    <Label Text="{Binding FindingsCount, StringFormat='{0} Hallazgos'}"
+                                           FontSize="14"
+                                           TextColor="{StaticResource Gray900}"
+                                           FontAttributes="Bold"
+                                           VerticalOptions="Center"/>
+                                </HorizontalStackLayout>
+                            </Grid>
                         </Border>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
