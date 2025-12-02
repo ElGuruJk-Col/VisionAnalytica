@@ -22,17 +22,19 @@ public partial class MultiCapturePage : ContentPage
     private readonly IApiClient _apiClient;
     private readonly IAuthService _authService;
     private readonly INotificationService _notificationService;
+    private readonly INavigationService? _navigationService;
     private readonly ObservableCollection<CapturedPhotoViewModel> _capturedPhotos = [];
     private IList<AffiliatedCompanyDto>? _assignedCompanies;
     private AffiliatedCompanyDto? _selectedCompany;
     private bool _isAnalyzing;
 
-    public MultiCapturePage(IApiClient apiClient, IAuthService authService, INotificationService notificationService)
+    public MultiCapturePage(IApiClient apiClient, IAuthService authService, INotificationService notificationService, INavigationService? navigationService = null)
     {
         InitializeComponent();
         _apiClient = apiClient;
         _authService = authService;
         _notificationService = notificationService;
+        _navigationService = navigationService;
         
         // Establecer ItemsSource directamente (no usar binding)
         PhotosCollection.ItemsSource = _capturedPhotos;
@@ -85,7 +87,9 @@ public partial class MultiCapturePage : ContentPage
                 await MainThread.InvokeOnMainThreadAsync(async () =>
                 {
                     await DisplayAlertAsync("Error", "No estás autenticado. Por favor, inicia sesión.", "OK");
-                    await Shell.Current.GoToAsync("//LoginPage");
+                    var navService = Handler?.MauiContext?.Services?.GetRequiredService<INavigationService>();
+                    if (navService != null)
+                        await navService.NavigateToLoginAsync();
                 });
                 return;
             }
@@ -497,7 +501,9 @@ public partial class MultiCapturePage : ContentPage
                 await Task.Delay(2000);
                 
                 // Navegar al historial para ver el estado del análisis
-                await Shell.Current.GoToAsync("//InspectionHistoryPage");
+                var navService = Handler?.MauiContext?.Services?.GetRequiredService<INavigationService>();
+                if (navService != null)
+                    await navService.NavigateToInspectionHistoryAsync();
             }
             else
             {

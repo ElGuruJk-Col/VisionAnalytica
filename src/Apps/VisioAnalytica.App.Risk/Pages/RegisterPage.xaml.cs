@@ -6,11 +6,27 @@ namespace VisioAnalytica.App.Risk.Pages;
 public partial class RegisterPage : ContentPage
 {
     private readonly IAuthService _authService;
+    private readonly INavigationService? _navigationService;
 
-    public RegisterPage(IAuthService authService)
+    public RegisterPage(IAuthService authService, INavigationService? navigationService = null)
     {
         InitializeComponent();
         _authService = authService;
+        _navigationService = navigationService;
+    }
+    
+    private INavigationService GetNavigationService()
+    {
+        if (_navigationService != null)
+            return _navigationService;
+
+        var serviceProvider = Handler?.MauiContext?.Services;
+        if (serviceProvider != null)
+        {
+            return serviceProvider.GetRequiredService<INavigationService>();
+        }
+
+        throw new InvalidOperationException("INavigationService no está disponible.");
     }
 
     private async void OnRegisterClicked(object? sender, EventArgs e)
@@ -61,7 +77,7 @@ public partial class RegisterPage : ContentPage
             if (response != null)
             {
                 // Registro exitoso - navegar a la página principal
-                await Shell.Current.GoToAsync("//MainPage");
+                await GetNavigationService().NavigateToMainAsync();
             }
             else
             {
@@ -87,7 +103,7 @@ public partial class RegisterPage : ContentPage
 
     private async void OnBackClicked(object? sender, EventArgs e)
     {
-        await Shell.Current.GoToAsync("..");
+        await GetNavigationService().NavigateBackAsync();
     }
 
     private void SetLoading(bool isLoading)

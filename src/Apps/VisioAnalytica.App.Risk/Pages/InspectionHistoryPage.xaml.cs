@@ -13,18 +13,34 @@ public partial class InspectionHistoryPage : ContentPage
     private readonly IApiClient _apiClient;
     private readonly IAuthService _authService;
     private readonly INotificationService _notificationService;
+    private readonly INavigationService? _navigationService;
     private readonly ObservableCollection<InspectionViewModel> _inspections = [];
     private IList<AffiliatedCompanyDto>? _companies;
     private Guid? _selectedCompanyFilter;
     private System.Timers.Timer? _statusCheckTimer;
 
-    public InspectionHistoryPage(IApiClient apiClient, IAuthService authService, INotificationService notificationService)
+    public InspectionHistoryPage(IApiClient apiClient, IAuthService authService, INotificationService notificationService, INavigationService? navigationService = null)
     {
         InitializeComponent();
         _apiClient = apiClient;
         _authService = authService;
         _notificationService = notificationService;
+        _navigationService = navigationService;
         InspectionsCollection.ItemsSource = _inspections;
+    }
+    
+    private INavigationService GetNavigationService()
+    {
+        if (_navigationService != null)
+            return _navigationService;
+
+        var serviceProvider = Handler?.MauiContext?.Services;
+        if (serviceProvider != null)
+        {
+            return serviceProvider.GetRequiredService<INavigationService>();
+        }
+
+        throw new InvalidOperationException("INavigationService no está disponible.");
     }
 
     protected override async void OnAppearing()
@@ -132,7 +148,7 @@ public partial class InspectionHistoryPage : ContentPage
         if (sender is Button button && button.CommandParameter is Guid inspectionId)
         {
             // Navegar a página de detalles con el ID
-            await Shell.Current.GoToAsync($"//InspectionDetailsPage?inspectionId={inspectionId}");
+            await GetNavigationService().NavigateToInspectionDetailsAsync(inspectionId);
         }
     }
 

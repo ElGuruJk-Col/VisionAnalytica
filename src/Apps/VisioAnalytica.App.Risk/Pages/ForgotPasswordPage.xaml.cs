@@ -6,11 +6,27 @@ namespace VisioAnalytica.App.Risk.Pages;
 public partial class ForgotPasswordPage : ContentPage
 {
     private readonly IAuthService _authService;
+    private readonly INavigationService? _navigationService;
 
-    public ForgotPasswordPage(IAuthService authService)
+    public ForgotPasswordPage(IAuthService authService, INavigationService? navigationService = null)
     {
         InitializeComponent();
         _authService = authService;
+        _navigationService = navigationService;
+    }
+    
+    private INavigationService GetNavigationService()
+    {
+        if (_navigationService != null)
+            return _navigationService;
+
+        var serviceProvider = Handler?.MauiContext?.Services;
+        if (serviceProvider != null)
+        {
+            return serviceProvider.GetRequiredService<INavigationService>();
+        }
+
+        throw new InvalidOperationException("INavigationService no está disponible.");
     }
 
     private async void OnSendClicked(object? sender, EventArgs e)
@@ -68,7 +84,7 @@ public partial class ForgotPasswordPage : ContentPage
 
     private async void OnBackToLoginClicked(object? sender, EventArgs e)
     {
-        await Shell.Current.GoToAsync("//LoginPage");
+        await GetNavigationService().NavigateToLoginAsync();
     }
 
     private void SetLoading(bool isLoading)

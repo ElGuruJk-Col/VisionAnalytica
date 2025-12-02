@@ -12,18 +12,35 @@ public partial class LoginPage : ContentPage
 {
     private IAuthService? _authService;
     private IApiClient? _apiClient;
+    private INavigationService? _navigationService;
 
     // Constructor sin parámetros para ContentTemplate
-    public LoginPage() : this(null, null)
+    public LoginPage() : this(null, null, null)
     {
     }
 
     // Constructor con DI para navegación programática
-    public LoginPage(IAuthService? authService, IApiClient? apiClient)
+    public LoginPage(IAuthService? authService, IApiClient? apiClient, INavigationService? navigationService = null)
     {
         InitializeComponent();
         _authService = authService;
         _apiClient = apiClient;
+        _navigationService = navigationService;
+    }
+    
+    private INavigationService GetNavigationService()
+    {
+        if (_navigationService != null)
+            return _navigationService;
+
+        var serviceProvider = Handler?.MauiContext?.Services;
+        if (serviceProvider != null)
+        {
+            _navigationService = serviceProvider.GetRequiredService<INavigationService>();
+            return _navigationService;
+        }
+
+        throw new InvalidOperationException("INavigationService no está disponible.");
     }
 
     // Obtener el servicio desde DI si no está disponible
@@ -86,17 +103,11 @@ public partial class LoginPage : ContentPage
 
             if (response != null)
             {
-                // Actualizar el menú del Flyout después del login
-                if (Shell.Current is AppShell appShell)
-                {
-                    appShell.UpdateFlyoutMenu();
-                }
-                
                 // Verificar si debe cambiar la contraseña
                 if (GetAuthService().MustChangePassword)
                 {
                     // Redirigir a la página de cambio de contraseña
-                    await Shell.Current.GoToAsync("//ChangePasswordPage");
+                    await GetNavigationService().NavigateToChangePasswordAsync();
                     return;
                 }
                 
@@ -124,10 +135,6 @@ public partial class LoginPage : ContentPage
                             
                             // Cerrar sesión
                             await authService.LogoutAsync();
-                            if (Shell.Current is AppShell shell)
-                            {
-                                shell.UpdateFlyoutMenu();
-                            }
                             return;
                         }
                     }
@@ -145,7 +152,7 @@ public partial class LoginPage : ContentPage
                 }
                 
                 // Login exitoso - navegar a la página principal
-                await Shell.Current.GoToAsync("//MainPage");
+                await GetNavigationService().NavigateToMainAsync();
             }
             else
             {
@@ -190,7 +197,7 @@ public partial class LoginPage : ContentPage
     private async void OnRegisterClicked(object? sender, EventArgs e)
     {
         // Navegar a la página de registro
-        await Shell.Current.GoToAsync("RegisterPage");
+        await GetNavigationService().NavigateToRegisterAsync();
     }
 
     [SupportedOSPlatform("android")]
@@ -200,7 +207,7 @@ public partial class LoginPage : ContentPage
     private async void OnForgotPasswordClicked(object? sender, EventArgs e)
     {
         // Navegar a la página de recuperación de contraseña
-        await Shell.Current.GoToAsync("ForgotPasswordPage");
+        await GetNavigationService().NavigateToForgotPasswordAsync();
     }
 
     private void SetLoading(bool isLoading)

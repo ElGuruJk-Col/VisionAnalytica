@@ -6,11 +6,27 @@ namespace VisioAnalytica.App.Risk.Pages;
 public partial class AdminDashboardPage : ContentPage
 {
     private readonly IApiClient _apiClient;
+    private readonly INavigationService? _navigationService;
 
-    public AdminDashboardPage(IApiClient apiClient)
+    public AdminDashboardPage(IApiClient apiClient, INavigationService? navigationService = null)
     {
         InitializeComponent();
         _apiClient = apiClient;
+        _navigationService = navigationService;
+    }
+    
+    private INavigationService GetNavigationService()
+    {
+        if (_navigationService != null)
+            return _navigationService;
+
+        var serviceProvider = Handler?.MauiContext?.Services;
+        if (serviceProvider != null)
+        {
+            return serviceProvider.GetRequiredService<INavigationService>();
+        }
+
+        throw new InvalidOperationException("INavigationService no está disponible.");
     }
 
     protected override async void OnAppearing()
@@ -49,6 +65,6 @@ public partial class AdminDashboardPage : ContentPage
 
     private async void OnViewHistoryClicked(object sender, EventArgs e)
     {
-        await Shell.Current.GoToAsync("TeamInspectionsPage");
+        await GetNavigationService().NavigateToTeamInspectionsAsync();
     }
 }

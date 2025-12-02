@@ -10,12 +10,13 @@ public partial class CapturePage : ContentPage
     private readonly INavigationDataService _navigationDataService;
     private readonly IApiClient _apiClient;
     private readonly IAuthService _authService;
+    private readonly INavigationService? _navigationService;
     private byte[]? _capturedImageBytes;
     private IList<AffiliatedCompanyDto>? _assignedCompanies;
     private AffiliatedCompanyDto? _selectedCompany;
 
     // Constructor con DI - Los servicios son requeridos y siempre se inyectan desde MauiProgram
-    public CapturePage(IAnalysisService analysisService, INavigationDataService navigationDataService, IApiClient apiClient, IAuthService authService)
+    public CapturePage(IAnalysisService analysisService, INavigationDataService navigationDataService, IApiClient apiClient, IAuthService authService, INavigationService? navigationService = null)
     {
         try
         {
@@ -24,6 +25,7 @@ public partial class CapturePage : ContentPage
             _navigationDataService = navigationDataService ?? throw new ArgumentNullException(nameof(navigationDataService));
             _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
             _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+            _navigationService = navigationService;
         }
         catch (Exception ex)
         {
@@ -52,7 +54,9 @@ public partial class CapturePage : ContentPage
                         "Acceso Restringido", 
                         "Esta página es solo para uso interno de desarrollo.", 
                         "OK");
-                    await Shell.Current.GoToAsync("//MainPage");
+                    var navService = _navigationService ?? Handler?.MauiContext?.Services?.GetRequiredService<INavigationService>();
+                    if (navService != null)
+                        await navService.NavigateToMainAsync();
                 });
                 return;
             }
@@ -137,7 +141,9 @@ public partial class CapturePage : ContentPage
                     MainThread.BeginInvokeOnMainThread(async () =>
                     {
                         await DisplayAlertAsync("Error", "No tienes empresas asignadas.", "OK");
-                        await Shell.Current.GoToAsync("//MainPage");
+                        var navService = _navigationService ?? Handler?.MauiContext?.Services?.GetRequiredService<INavigationService>();
+                    if (navService != null)
+                        await navService.NavigateToMainAsync();
                     });
                 }
             });
@@ -384,7 +390,9 @@ public partial class CapturePage : ContentPage
                         AnalyzeButton.IsEnabled = false;
 
                         // Navegar a la página de resultados
-                        await Shell.Current.GoToAsync("//ResultsPage");
+                        var navService = _navigationService ?? Handler?.MauiContext?.Services?.GetRequiredService<INavigationService>();
+                        if (navService != null)
+                            await navService.NavigateToResultsAsync();
                     }
                     catch (Exception ex)
                     {
@@ -500,7 +508,9 @@ public partial class CapturePage : ContentPage
                 "OK");
 
             // Navegar al historial de inspecciones
-            await Shell.Current.GoToAsync("//InspectionHistoryPage");
+            var navService = _navigationService ?? Handler?.MauiContext?.Services?.GetRequiredService<INavigationService>();
+            if (navService != null)
+                await navService.NavigateToInspectionHistoryAsync();
         }
         catch (ApiException ex)
         {

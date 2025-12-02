@@ -8,13 +8,13 @@ namespace VisioAnalytica.App.Risk.Pages;
 /// <summary>
 /// Página para mostrar los detalles de una inspección, incluyendo fotos y hallazgos.
 /// </summary>
-[QueryProperty(nameof(InspectionId), "inspectionId")]
 public partial class InspectionDetailsPage : ContentPage
 {
     private readonly IApiClient _apiClient;
     private readonly IAuthService _authService;
     private readonly ObservableCollection<PhotoFindingViewModel> _photoFindings = [];
     private InspectionDto? _inspection;
+    private Guid? _inspectionId;
     
     private static readonly string[] UploadsSeparator = ["/uploads/"];
     
@@ -23,30 +23,13 @@ public partial class InspectionDetailsPage : ContentPage
     {
         Timeout = TimeSpan.FromSeconds(30)
     };
-    
-    // Propiedad para recibir el ID desde la navegación
-    private string _inspectionId = string.Empty;
-    public string InspectionId
-    {
-        get => _inspectionId;
-        set
-        {
-            _inspectionId = value;
-            System.Diagnostics.Debug.WriteLine($"🔍 InspectionId recibido: {value}");
-            
-            // Cuando se establece el ID, cargar los detalles
-            if (!string.IsNullOrEmpty(value) && Guid.TryParse(value, out var guid))
-            {
-                _ = LoadInspectionDetails(guid);
-            }
-        }
-    }
 
-    public InspectionDetailsPage(IApiClient apiClient, IAuthService authService)
+    public InspectionDetailsPage(IApiClient apiClient, IAuthService authService, Guid? inspectionId = null)
     {
         InitializeComponent();
         _apiClient = apiClient;
         _authService = authService;
+        _inspectionId = inspectionId;
         PhotosCollection.ItemsSource = _photoFindings;
     }
 
@@ -60,54 +43,14 @@ public partial class InspectionDetailsPage : ContentPage
             return;
         }
         
-        // Si tenemos el ID pero aún no hemos cargado, intentar cargar
-        if (!string.IsNullOrEmpty(_inspectionId) && Guid.TryParse(_inspectionId, out var inspectionId))
+        // Si tenemos el ID, cargar los detalles
+        if (_inspectionId.HasValue)
         {
-            await LoadInspectionDetails(inspectionId);
+            await LoadInspectionDetails(_inspectionId.Value);
         }
         else
         {
-            // Intentar obtener desde la query string como fallback
-            try
-            {
-                var currentState = Shell.Current.CurrentState;
-                if (currentState != null)
-                {
-                    var location = currentState.Location;
-                    var fullPath = location.OriginalString ?? location.ToString();
-                    
-                    System.Diagnostics.Debug.WriteLine($"🔍 Location completo (fallback): {fullPath}");
-                    
-                    if (fullPath.Contains("inspectionId="))
-                    {
-                        var startIndex = fullPath.IndexOf("inspectionId=", StringComparison.Ordinal) + "inspectionId=".Length;
-                        var endIndex = fullPath.IndexOf('&', startIndex);
-                        if (endIndex == -1)
-                        {
-                            endIndex = fullPath.IndexOf('?', startIndex);
-                            if (endIndex == -1)
-                            {
-                                endIndex = fullPath.Length;
-                            }
-                        }
-                        
-                        var idString = fullPath[startIndex..endIndex].Trim();
-                        System.Diagnostics.Debug.WriteLine($"🔍 ID extraído (fallback): {idString}");
-                        
-                        if (Guid.TryParse(idString, out var parsedId))
-                        {
-                            await LoadInspectionDetails(parsedId);
-                            return;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"❌ Error al obtener inspectionId (fallback): {ex.Message}");
-            }
-            
-            System.Diagnostics.Debug.WriteLine("❌ No se pudo obtener el inspectionId");
+            System.Diagnostics.Debug.WriteLine("❌ No se proporcionó ID de inspección.");
             await DisplayAlertAsync("Error", "No se proporcionó ID de inspección.", "OK");
             await GoBackAsync();
         }
@@ -118,23 +61,32 @@ public partial class InspectionDetailsPage : ContentPage
         await GoBackAsync();
     }
 
-    private static async Task GoBackAsync()
+    private async Task GoBackAsync()
     {
-        // Intentar regresar a la página anterior
-        if (Shell.Current.Navigation.NavigationStack.Count > 1)
+        // Intentar regresar a la página anterior usando Navigation
+        var navigation = Navigation;
+        if (navigation != null && navigation.NavigationStack.Count > 1)
         {
-            await Shell.Current.GoToAsync("..");
+            await navigation.PopAsync();
         }
         else
         {
-            // Si no hay página anterior, ir al historial
-            await Shell.Current.GoToAsync("//InspectionHistoryPage");
+            // Si no hay página anterior, intentar obtener NavigationService
+            var serviceProvider = Handler?.MauiContext?.Services;
+            if (serviceProvider != null)
+            {
+                var navService = serviceProvider.GetService<INavigationService>();
+                if (navService != null)
+                {
+                    await navService.NavigateToInspectionHistoryAsync();
+                }
+            }
         }
     }
 
     public async Task LoadInspectionDetails(Guid inspectionId)
     {
-        _inspectionId = inspectionId.ToString();
+        _inspectionId = inspectionId;
         
         try
         {
@@ -179,14 +131,14 @@ public partial class InspectionDetailsPage : ContentPage
             else
             {
                 await DisplayAlertAsync("Error", "No se pudo cargar la inspección.", "OK");
-                await Shell.Current.GoToAsync("..");
+                await GoBackAsync();
             }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Error al cargar detalles: {ex}");
             await DisplayAlertAsync("Error", $"Error al cargar detalles: {ex.Message}", "OK");
-            await Shell.Current.GoToAsync("..");
+            await GoBackAsync();
         }
         finally
         {
