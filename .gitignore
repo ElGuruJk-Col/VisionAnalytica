@@ -74,4 +74,5 @@ TestResults/
 
 # Directorios de imagenes subidas al servidor
 Storage/Images/
-/src/Storage/Images/11d41edd-1c57-4df1-db36-08de2d1ddd7e
+src/Storage/Images/
+**/Storage/Images/
