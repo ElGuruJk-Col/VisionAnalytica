@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using VisioAnalytica.App.Risk.Services;
 
 namespace VisioAnalytica.App.Risk;
 
@@ -11,31 +12,32 @@ public partial class App : Application
 
 	protected override Window CreateWindow(IActivationState? activationState)
 	{
-		// Obtener AppShell desde el contenedor de DI
-		// Intentar obtener desde diferentes fuentes
-		AppShell? shell = null;
+		// Obtener NavigationService desde el contenedor de DI
 		IServiceProvider? serviceProvider = null;
 		
 		// Método 1: Desde Handler.MauiContext (disponible después de que se construye la app)
 		if (Handler?.MauiContext?.Services != null)
 		{
 			serviceProvider = Handler.MauiContext.Services;
-			shell = serviceProvider.GetService<AppShell>();
 		}
 		
 		// Método 2: Desde activationState si está disponible
-		if (shell == null && activationState?.Context?.Services != null)
+		if (serviceProvider == null && activationState?.Context?.Services != null)
 		{
 			serviceProvider = activationState.Context.Services;
-			shell = serviceProvider.GetService<AppShell>();
 		}
 		
-		// Método 3: Crear nueva instancia (fallback)
-		// Si no podemos obtener desde DI, crear sin serviceProvider
-		// Las páginas fallarán al crearse desde ContentTemplate, pero las rutas registradas funcionarán
-		shell ??= new AppShell(serviceProvider);
+		// Si no tenemos serviceProvider, lanzar excepción
+		if (serviceProvider == null)
+		{
+			throw new InvalidOperationException("No se pudo obtener el ServiceProvider. La aplicación no se ha inicializado correctamente.");
+		}
 		
-		var window = new Window(shell);
+		// Obtener NavigationService y crear la página inicial
+		var navigationService = serviceProvider.GetRequiredService<INavigationService>();
+		var initialPage = navigationService.GetInitialPage();
+		
+		var window = new Window(initialPage);
 		
 #if WINDOWS
 		window.Title = "VisioAnalytica Risk";

@@ -6,12 +6,14 @@ namespace VisioAnalytica.App.Risk.Pages;
 public partial class ResetPasswordPage : ContentPage
 {
     private readonly IAuthService _authService;
+    private readonly INavigationService? _navigationService;
     private string? _token;
 
-    public ResetPasswordPage(IAuthService authService)
+    public ResetPasswordPage(IAuthService authService, INavigationService? navigationService = null)
     {
         InitializeComponent();
         _authService = authService;
+        _navigationService = navigationService;
         
         // Intentar obtener el token de los query parameters si viene de un deep link
         LoadTokenFromQuery();
@@ -27,8 +29,8 @@ public partial class ResetPasswordPage : ContentPage
     private void LoadTokenFromQuery()
     {
         // Si la página se carga con query parameters (desde un deep link o URL)
-        // En MAUI, esto se puede hacer con Shell.Current.CurrentState.Location
         // Por ahora, el usuario puede ingresar el token manualmente en el campo TokenEntry
+        // Nota: Deep linking se puede implementar manualmente con NavigationService si es necesario
     }
 
     public void SetToken(string token)
@@ -102,7 +104,9 @@ public partial class ResetPasswordPage : ContentPage
                 
                 // Esperar un momento y redirigir al login
                 await Task.Delay(2000);
-                await Shell.Current.GoToAsync("//LoginPage");
+                var navService = _navigationService ?? Handler?.MauiContext?.Services?.GetRequiredService<INavigationService>();
+                if (navService != null)
+                    await navService.NavigateToLoginAsync();
             }
             else
             {
@@ -128,7 +132,9 @@ public partial class ResetPasswordPage : ContentPage
 
     private async void OnBackToLoginClicked(object? sender, EventArgs e)
     {
-        await Shell.Current.GoToAsync("//LoginPage");
+        var navService = _navigationService ?? Handler?.MauiContext?.Services?.GetRequiredService<INavigationService>();
+        if (navService != null)
+            await navService.NavigateToLoginAsync();
     }
 
     private void SetLoading(bool isLoading)

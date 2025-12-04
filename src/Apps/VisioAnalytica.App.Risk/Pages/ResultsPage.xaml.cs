@@ -11,6 +11,7 @@ public partial class ResultsPage : ContentPage
     private readonly IApiClient _apiClient;
     private readonly INavigationDataService _navigationDataService;
     private readonly IAuthService _authService;
+    private readonly INavigationService? _navigationService;
     public ObservableCollection<FindingViewModel> Findings { get; } = new();
     
     // Caché local para mantener los resultados cuando se navega a otras páginas
@@ -18,13 +19,28 @@ public partial class ResultsPage : ContentPage
     private byte[]? _cachedImageBytes;
     private ImageSource? _cachedImageSource;
 
-    public ResultsPage(IApiClient apiClient, INavigationDataService navigationDataService, IAuthService authService)
+    public ResultsPage(IApiClient apiClient, INavigationDataService navigationDataService, IAuthService authService, INavigationService? navigationService = null)
     {
         InitializeComponent();
         _apiClient = apiClient;
         _navigationDataService = navigationDataService;
         _authService = authService;
+        _navigationService = navigationService;
         FindingsCollection.ItemsSource = Findings;
+    }
+    
+    private INavigationService GetNavigationService()
+    {
+        if (_navigationService != null)
+            return _navigationService;
+
+        var serviceProvider = Handler?.MauiContext?.Services;
+        if (serviceProvider != null)
+        {
+            return serviceProvider.GetRequiredService<INavigationService>();
+        }
+
+        throw new InvalidOperationException("INavigationService no está disponible.");
     }
 
     protected override async void OnAppearing()
@@ -240,7 +256,7 @@ public partial class ResultsPage : ContentPage
         // Limpiar caché local y del servicio cuando se inicia un nuevo análisis
         ClearCache();
         _navigationDataService.Clear(); // Limpiar también el servicio Singleton
-        await Shell.Current.GoToAsync("//MultiCapturePage");
+        await GetNavigationService().NavigateToMultiCaptureAsync();
     }
     
     /// <summary>
@@ -258,7 +274,7 @@ public partial class ResultsPage : ContentPage
 
     private async void OnHistoryClicked(object? sender, EventArgs e)
     {
-        await Shell.Current.GoToAsync("//HistoryPage");
+        await GetNavigationService().NavigateToHistoryAsync();
     }
 
     /// <summary>

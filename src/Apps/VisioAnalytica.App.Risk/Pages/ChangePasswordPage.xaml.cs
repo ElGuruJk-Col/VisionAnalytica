@@ -6,30 +6,33 @@ namespace VisioAnalytica.App.Risk.Pages;
 public partial class ChangePasswordPage : ContentPage
 {
     private readonly IAuthService _authService;
+    private readonly INavigationService? _navigationService;
     private bool _isTemporaryPassword;
-    private string? _previousRoute;
 
-    public ChangePasswordPage(IAuthService authService)
+    public ChangePasswordPage(IAuthService authService, INavigationService? navigationService = null)
     {
         InitializeComponent();
         _authService = authService;
+        _navigationService = navigationService;
+    }
+    
+    private INavigationService GetNavigationService()
+    {
+        if (_navigationService != null)
+            return _navigationService;
+
+        var serviceProvider = Handler?.MauiContext?.Services;
+        if (serviceProvider != null)
+        {
+            return serviceProvider.GetRequiredService<INavigationService>();
+        }
+
+        throw new InvalidOperationException("INavigationService no está disponible.");
     }
 
     protected override void OnAppearing()
     {
         base.OnAppearing();
-        
-        // Obtener la ruta anterior desde AppShell
-        if (Shell.Current is AppShell appShell && !string.IsNullOrEmpty(AppShell.PreviousRoute))
-        {
-            _previousRoute = AppShell.PreviousRoute;
-        }
-        
-        // Si no hay ruta anterior guardada y el usuario está autenticado, usar MainPage como default
-        if (string.IsNullOrEmpty(_previousRoute) && _authService.IsAuthenticated)
-        {
-            _previousRoute = "//MainPage";
-        }
         
         // Detectar si viene de contraseña temporal
         _isTemporaryPassword = _authService.MustChangePassword;
@@ -143,14 +146,8 @@ public partial class ChangePasswordPage : ContentPage
                 // Cerrar sesión y redirigir al login
                 await _authService.LogoutAsync();
                 
-                // Actualizar el menú del Flyout
-                if (Shell.Current is AppShell appShell)
-                {
-                    appShell.UpdateFlyoutMenu();
-                }
-                
                 // Redirigir al login
-                await Shell.Current.GoToAsync("//LoginPage");
+                await GetNavigationService().NavigateToLoginAsync();
             }
             else
             {
@@ -189,44 +186,23 @@ public partial class ChangePasswordPage : ContentPage
     {
         try
         {
-            // Intentar navegar a la ruta anterior guardada
-            if (!string.IsNullOrEmpty(_previousRoute) && !_previousRoute.Contains("ChangePasswordPage"))
+            // Si está autenticado, ir a MainPage, sino al login
+            if (_authService.IsAuthenticated)
             {
-                await Shell.Current.GoToAsync(_previousRoute);
-            }
-            else if (_authService.IsAuthenticated)
-            {
-                // Si no hay ruta anterior pero está autenticado, ir a MainPage
-                await Shell.Current.GoToAsync("//MainPage");
+                await GetNavigationService().NavigateToMainAsync();
             }
             else
             {
-                // Si no está autenticado, ir al login
-                await Shell.Current.GoToAsync("//LoginPage");
+                await GetNavigationService().NavigateToLoginAsync();
             }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Error al regresar: {ex.Message}");
-            // Fallback: navegar a MainPage si está autenticado, sino al login
-            try
+            // Fallback: usar Navigation.PopAsync
+            if (Navigation.NavigationStack.Count > 1)
             {
-                if (_authService.IsAuthenticated)
-                {
-                    await Shell.Current.GoToAsync("//MainPage");
-                }
-                else
-                {
-                    await Shell.Current.GoToAsync("//LoginPage");
-                }
-            }
-            catch
-            {
-                // Si todo falla, intentar usar Navigation.PopAsync
-                if (Navigation.NavigationStack.Count > 1)
-                {
-                    await Navigation.PopAsync();
-                }
+                await Navigation.PopAsync();
             }
         }
     }

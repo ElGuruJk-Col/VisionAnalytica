@@ -7,13 +7,29 @@ namespace VisioAnalytica.App.Risk.Pages;
 public partial class TeamInspectionsPage : ContentPage
 {
     private readonly IApiClient _apiClient;
+    private readonly INavigationService? _navigationService;
     public ObservableCollection<InspectionGroup> InspectionGroups { get; } = new();
 
-    public TeamInspectionsPage(IApiClient apiClient)
+    public TeamInspectionsPage(IApiClient apiClient, INavigationService? navigationService = null)
     {
         InitializeComponent();
         _apiClient = apiClient;
+        _navigationService = navigationService;
         HistoryCollection.ItemsSource = InspectionGroups;
+    }
+    
+    private INavigationService GetNavigationService()
+    {
+        if (_navigationService != null)
+            return _navigationService;
+
+        var serviceProvider = Handler?.MauiContext?.Services;
+        if (serviceProvider != null)
+        {
+            return serviceProvider.GetRequiredService<INavigationService>();
+        }
+
+        throw new InvalidOperationException("INavigationService no está disponible.");
     }
 
     protected override async void OnAppearing()
@@ -103,7 +119,7 @@ public partial class TeamInspectionsPage : ContentPage
         if (e.CurrentSelection.FirstOrDefault() is InspectionHistoryViewModel selected)
         {
             // Navegar a detalles
-            await Shell.Current.GoToAsync($"InspectionDetailsPage?inspectionId={selected.Id}");
+            await GetNavigationService().NavigateToInspectionDetailsAsync(selected.Id);
             
             // Deseleccionar
             ((CollectionView)sender).SelectedItem = null;
