@@ -84,6 +84,11 @@ public interface INavigationService
 	Task NavigateToTeamInspectionsAsync();
 
 	/// <summary>
+	/// Cambia a la tab de Historial en el TabbedPage y refresca los datos.
+	/// </summary>
+	Task NavigateToHistoryTabAsync();
+
+	/// <summary>
 	/// Navega hacia atrás en la pila de navegación.
 	/// </summary>
 	Task NavigateBackAsync();

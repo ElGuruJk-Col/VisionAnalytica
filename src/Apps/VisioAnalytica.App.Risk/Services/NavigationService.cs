@@ -74,9 +74,21 @@ public class NavigationService : INavigationService
 	/// <summary>
 	/// Navega a la página principal después del login.
 	/// Crea un TabbedPage con las pestañas principales.
+	/// Reutiliza el TabbedPage si ya existe para evitar recrear las páginas.
 	/// </summary>
 	public async Task NavigateToMainAsync()
 	{
+		var window = Application.Current?.Windows?.FirstOrDefault();
+		
+		// Verificar si ya existe un TabbedPage
+		if (window?.Page is NavigationPage navPage && navPage.CurrentPage is TabbedPage existingTabbedPage)
+		{
+			// Ya existe un TabbedPage, solo cambiar a la primera tab (Inicio)
+			existingTabbedPage.CurrentPage = existingTabbedPage.Children[0];
+			return;
+		}
+
+		// Crear TabbedPage solo si no existe
 		var mainPage = _serviceProvider.GetRequiredService<MainPage>();
 		var multiCapturePage = _serviceProvider.GetRequiredService<MultiCapturePage>();
 		var inspectionHistoryPage = _serviceProvider.GetRequiredService<InspectionHistoryPage>();
@@ -94,12 +106,11 @@ public class NavigationService : INavigationService
 		};
 
 		// Reemplazar la página raíz
-		var window = Application.Current?.Windows?.FirstOrDefault();
 		if (window != null)
 		{
-			var navPage = new NavigationPage(tabbedPage);
-			window.Page = navPage;
-			_currentNavigationPage = navPage;
+			var newNavPage = new NavigationPage(tabbedPage);
+			window.Page = newNavPage;
+			_currentNavigationPage = newNavPage;
 		}
 	}
 
@@ -175,6 +186,37 @@ public class NavigationService : INavigationService
 	{
 		var page = _serviceProvider.GetRequiredService<TeamInspectionsPage>();
 		await GetCurrentNavigation().Navigation.PushAsync(page);
+	}
+
+	/// <summary>
+	/// Cambia a la tab de Historial en el TabbedPage y refresca los datos.
+	/// Si no existe un TabbedPage, navega normalmente a InspectionHistoryPage.
+	/// </summary>
+	public async Task NavigateToHistoryTabAsync()
+	{
+		var window = Application.Current?.Windows?.FirstOrDefault();
+		
+		// Verificar si existe un TabbedPage
+		if (window?.Page is NavigationPage navPage && navPage.CurrentPage is TabbedPage tabbedPage)
+		{
+			// Buscar la tab de Historial (índice 2)
+			if (tabbedPage.Children.Count > 2)
+			{
+				var historyNavPage = tabbedPage.Children[2] as NavigationPage;
+				if (historyNavPage?.CurrentPage is InspectionHistoryPage historyPage)
+				{
+					// Cambiar a la tab de Historial
+					tabbedPage.CurrentPage = historyNavPage;
+					
+					// Refrescar los datos
+					await historyPage.RefreshDataAsync();
+					return;
+				}
+			}
+		}
+		
+		// Si no existe TabbedPage o no se encontró la página, navegar normalmente
+		await NavigateToInspectionHistoryAsync();
 	}
 
 	public async Task NavigateBackAsync()

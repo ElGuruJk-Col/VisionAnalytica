@@ -1,89 +1,142 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
-		<TargetFrameworks>net10.0-android;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
-    <!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
-		<!-- <TargetFrameworks>$(TargetFrameworks);net10.0-tizen</TargetFrameworks> -->
+  <!-- ─────────────────────────────
+       PROPIEDADES GENERALES
+       ───────────────────────────── -->
+  <PropertyGroup>
+    <TargetFrameworks>net10.0-android;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
 
-		<!-- Note for MacCatalyst:
-		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
-		When specifying both architectures, use the plural <RuntimeIdentifiers> instead of the singular <RuntimeIdentifier>.
-		The Mac App Store will NOT accept apps with ONLY maccatalyst-arm64 indicated;
-		either BOTH runtimes must be indicated or ONLY macatalyst-x64. -->
-		<!-- For example: <RuntimeIdentifiers>maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers> -->
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">
+      $(TargetFrameworks);net10.0-windows10.0.19041.0
+    </TargetFrameworks>
 
-		<OutputType>Exe</OutputType>
-		<RootNamespace>VisioAnalytica.App.Risk</RootNamespace>
-		<UseMaui>true</UseMaui>
-		<SingleProject>true</SingleProject>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<Nullable>enable</Nullable>
-		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <UseMaui>true</UseMaui>
+    <SingleProject>true</SingleProject>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
-		<!-- Display name -->
-		<ApplicationTitle>VisioAnalytica.App.Risk</ApplicationTitle>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>VisioAnalytica.App.Risk</RootNamespace>
 
-		<!-- App Identifier -->
-		<ApplicationId>com.companyname.visioanalytica.app.risk</ApplicationId>
+    <!-- App info -->
+    <ApplicationTitle>VisioAnalytica.App.Risk</ApplicationTitle>
+    <ApplicationId>com.companyname.visioanalytica.app.risk</ApplicationId>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
 
-		<!-- Versions -->
-		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
-		<ApplicationVersion>1</ApplicationVersion>
+    <!-- Windows -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+      false
+    </WindowsAppSDKSelfContained>
 
-		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
-		<WindowsPackageType>None</WindowsPackageType>
-		
-		<!-- Windows App SDK Configuration - Deshabilitar SelfContained para evitar errores de arquitectura -->
-		<WindowsAppSDKSelfContained Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">false</WindowsAppSDKSelfContained>
-		
-		<!--Espacio de meoria para la maquina virtual de Java en Android-->
-		<AndroidJavaMaxHeapSize>3G</AndroidJavaMaxHeapSize>
+    <!-- Android -->
+    <AndroidJavaMaxHeapSize>3G</AndroidJavaMaxHeapSize>
 
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
-		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'tizen'">6.5</SupportedOSPlatformVersion>
-	</PropertyGroup>
+    <!-- Versiones mínimas -->
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+    <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 
-  <!-- Configuración de Android -->
+    <!-- Runtime Identifiers -->
+    <RuntimeIdentifiers Condition="'$(TargetFramework)' == 'net10.0-android'">
+      android-arm64;android-x64;android-x86
+    </RuntimeIdentifiers>
+
+    <!-- iOS: NO indicar múltiples RIDs (VS lo maneja automáticamente) -->
+
+    <RuntimeIdentifiers Condition="'$(TargetFramework)' == 'net10.0-maccatalyst'">
+      maccatalyst-x64;maccatalyst-arm64
+    </RuntimeIdentifiers>
+
+    <RuntimeIdentifiers Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
+      win-x64;win-x86;win-arm64
+    </RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <!-- ─────────────────────────────
+       CONFIGURACIONES PROFESIONALES
+       ───────────────────────────── -->
+
+  <!-- Debug para simulador iOS -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug-Simulator'">
+    <RuntimeIdentifier>iossimulator-arm64</RuntimeIdentifier>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+
+  <!-- Debug para dispositivo real iOS -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug-Device'">
+    <RuntimeIdentifier>ios-arm64</RuntimeIdentifier>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+
+  <!-- Release para App Store -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release-AppStore'">
+    <RuntimeIdentifier>ios-arm64</RuntimeIdentifier>
+    <Optimize>true</Optimize>
+    <UseInterpreter>true</UseInterpreter>
+    <AOTCompilation>true</AOTCompilation>
+    <CodesignProvision>Automatic</CodesignProvision>
+    <CodesignKey>iPhone Distribution</CodesignKey>
+  </PropertyGroup>
+
+  <!-- Release para Google Play (AAB) -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release-PlayStore'">
+    <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
+    <Optimize>true</Optimize>
+    <AndroidPackageFormat>aab</AndroidPackageFormat>
+    <AotAssemblies>true</AotAssemblies>
+  </PropertyGroup>
+
+  <!-- Android Extra -->
   <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-android'">
     <EmbedAssembliesIntoApk>false</EmbedAssembliesIntoApk>
   </PropertyGroup>
-  
-	<ItemGroup>
-		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
 
-		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+  <!-- ─────────────────────────────
+       RECURSOS MAUI
+       ───────────────────────────── -->
+  <ItemGroup>
+    <MauiIcon Include="Resources\AppIcon\appicon.svg"
+              ForegroundFile="Resources\AppIcon\appiconfg.svg"
+              Color="#512BD4" />
 
-		<!-- Images -->
-		<MauiImage Include="Resources\Images\*" />
-		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
-		
-		<!-- Custom Fonts -->
-		<MauiFont Include="Resources\Fonts\*" />
+    <MauiSplashScreen Include="Resources\Splash\splash.svg"
+                      Color="#512BD4"
+                      BaseSize="128,128" />
 
-		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
-		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
-	</ItemGroup>
+    <MauiImage Include="Resources\Images\*" />
+    <MauiImage Update="Resources\Images\dotnet_bot.png"
+               Resize="True"
+               BaseSize="300,185" />
 
-	<!-- Android Network Security Config -->
-	<ItemGroup Condition="'$(TargetFramework)' == 'net10.0-android'">
-		<AndroidResource Include="Platforms\Android\Resources\xml\network_security_config.xml" />
-	</ItemGroup>
+    <MauiFont Include="Resources\Fonts\*" />
+    <MauiAsset Include="Resources\Raw\**"
+               LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
 
-	<ItemGroup>
-		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
-		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
-	</ItemGroup>
+  <!-- Android Network Security -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-android'">
+    <AndroidResource Include="Platforms\Android\Resources\xml\network_security_config.xml" />
+  </ItemGroup>
 
+  <!-- ─────────────────────────────
+       NUGET PACKAGES
+       ───────────────────────────── -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
+  </ItemGroup>
 
+  <!-- ─────────────────────────────
+       PROJECT REFERENCES
+       ───────────────────────────── -->
   <ItemGroup>
     <ProjectReference Include="..\..\Core\VisioAnalytica.Core.csproj" />
   </ItemGroup>
+
 </Project>

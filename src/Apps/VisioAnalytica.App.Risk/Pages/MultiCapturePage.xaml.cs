@@ -500,10 +500,11 @@ public partial class MultiCapturePage : ContentPage
                 // Esperar un momento para que el usuario vea el mensaje
                 await Task.Delay(2000);
                 
-                // Navegar al historial para ver el estado del análisis
+                // Navegar a la tab de Historial y refrescar datos
+                // Esto evita crear una nueva instancia de la página
                 var navService = Handler?.MauiContext?.Services?.GetRequiredService<INavigationService>();
                 if (navService != null)
-                    await navService.NavigateToInspectionHistoryAsync();
+                    await navService.NavigateToHistoryTabAsync();
             }
             else
             {

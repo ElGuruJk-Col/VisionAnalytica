@@ -1,4 +1,7 @@
 using System.Collections.ObjectModel;
+using System.Linq;
+using System.Threading;
+using Microsoft.Maui.ApplicationModel;
 using VisioAnalytica.App.Risk.Services;
 using VisioAnalytica.Core.Models.Dtos;
 
@@ -18,6 +21,11 @@ public partial class InspectionHistoryPage : ContentPage
     private IList<AffiliatedCompanyDto>? _companies;
     private Guid? _selectedCompanyFilter;
     private System.Timers.Timer? _statusCheckTimer;
+    private bool _isDataLoaded = false;
+    private DateTime? _lastLoadTime;
+    private static readonly TimeSpan CacheExpiration = TimeSpan.FromMinutes(2); // Cache por 2 minutos
+    private bool _isLoading = false;
+    private CancellationTokenSource? _loadCancellationToken;
 
     public InspectionHistoryPage(IApiClient apiClient, IAuthService authService, INotificationService notificationService, INavigationService? navigationService = null)
     {
@@ -43,10 +51,38 @@ public partial class InspectionHistoryPage : ContentPage
         throw new InvalidOperationException("INavigationService no está disponible.");
     }
 
-    protected override async void OnAppearing()
+    protected override void OnAppearing()
     {
         base.OnAppearing();
-        await LoadData();
+        
+        // Solo cargar datos si no se han cargado o si el cache expiró
+        // Esto evita recargas innecesarias cuando se cambia de tab en el TabbedPage
+        if ((!_isDataLoaded || 
+            (_lastLoadTime.HasValue && DateTime.Now - _lastLoadTime.Value > CacheExpiration)) &&
+            !_isLoading)
+        {
+            // Lanzar la carga sin esperarla (fire and forget)
+            // Esto permite que el usuario cambie de tab inmediatamente
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await LoadDataAsync().ConfigureAwait(false);
+                    _isDataLoaded = true;
+                    _lastLoadTime = DateTime.Now;
+                }
+                catch (OperationCanceledException)
+                {
+                    // Carga cancelada, no hacer nada
+                    System.Diagnostics.Debug.WriteLine("Carga de datos cancelada");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error al cargar datos en background: {ex}");
+                }
+            });
+        }
+        
         StartStatusCheckTimer();
     }
 
@@ -54,78 +90,125 @@ public partial class InspectionHistoryPage : ContentPage
     {
         base.OnDisappearing();
         StopStatusCheckTimer();
+        
+        // Cancelar carga si está en progreso cuando el usuario cambia de tab
+        _loadCancellationToken?.Cancel();
+        _loadCancellationToken = null;
     }
 
-    private async Task LoadData()
+    private async Task LoadDataAsync()
     {
+        // Cancelar carga anterior si existe
+        _loadCancellationToken?.Cancel();
+        _loadCancellationToken = new CancellationTokenSource();
+        var ct = _loadCancellationToken.Token;
+        
         try
         {
-            SetLoading(true);
+            _isLoading = true;
+            
+            // Actualizar UI en el hilo principal
+            MainThread.BeginInvokeOnMainThread(SetLoadingTrue);
 
-            // Cargar empresas para el filtro
+            // Cargar empresas para el filtro (en background)
             var roles = _authService.CurrentUserRoles;
             if (roles.Contains("Inspector"))
             {
-                _companies = await _apiClient.GetMyCompaniesAsync();
+                ct.ThrowIfCancellationRequested();
+                _companies = await _apiClient.GetMyCompaniesAsync().ConfigureAwait(false);
                 
-                var companyList = new List<string> { "Todas las empresas" };
-                if (_companies != null)
-                {
-                    companyList.AddRange(_companies.Select(c => c.Name));
-                }
-                CompanyFilterPicker.ItemsSource = companyList;
+                // Actualizar UI en el hilo principal
+                MainThread.BeginInvokeOnMainThread(UpdateCompanyFilter);
             }
             else
             {
-                CompanyFilterPicker.IsVisible = false;
+                MainThread.BeginInvokeOnMainThread(HideCompanyFilter);
             }
 
-            // Cargar inspecciones
-            await LoadInspections();
+            // Cargar inspecciones (en background)
+            ct.ThrowIfCancellationRequested();
+            await LoadInspectionsAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Carga cancelada, no hacer nada
+            System.Diagnostics.Debug.WriteLine("Carga de datos cancelada por el usuario");
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Error al cargar datos: {ex}");
-            await DisplayAlertAsync("Error", "No se pudieron cargar las inspecciones.", "OK");
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
+                await DisplayAlertAsync("Error", "No se pudieron cargar las inspecciones.", "OK");
+            }).ConfigureAwait(false);
         }
         finally
         {
-            SetLoading(false);
+            _isLoading = false;
+            MainThread.BeginInvokeOnMainThread(SetLoadingFalse);
         }
     }
+    
+    /// <summary>
+    /// Método legacy para compatibilidad. Usa LoadDataAsync internamente.
+    /// </summary>
+    private async Task LoadData()
+    {
+        await LoadDataAsync();
+    }
 
-    private async Task LoadInspections()
+    private async Task LoadInspectionsAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            var inspections = await _apiClient.GetMyInspectionsAsync(_selectedCompanyFilter);
+            cancellationToken.ThrowIfCancellationRequested();
             
-            _inspections.Clear();
+            // Cargar datos en background
+            var inspections = await _apiClient.GetMyInspectionsAsync(_selectedCompanyFilter).ConfigureAwait(false);
             
-            foreach (var inspection in inspections)
+            cancellationToken.ThrowIfCancellationRequested();
+            
+            // Procesar todos los datos en background primero (más eficiente)
+            var viewModels = inspections.Select(inspection => new InspectionViewModel
             {
-                var viewModel = new InspectionViewModel
-                {
-                    Id = inspection.Id,
-                    CompanyName = inspection.AffiliatedCompanyName,
-                    Status = GetStatusDisplay(inspection.Status),
-                    StatusColor = GetStatusColor(inspection.Status),
-                    StatusBackgroundColor = GetStatusBackgroundColor(inspection.Status),
-                    DateRange = $"{inspection.StartedAt:dd/MM/yyyy HH:mm} - {(inspection.CompletedAt?.ToString("dd/MM/yyyy HH:mm") ?? "En proceso")}",
-                    PhotosInfo = $"{inspection.AnalyzedPhotosCount} de {inspection.PhotosCount} fotos analizadas"
-                };
-                
-                _inspections.Add(viewModel);
-            }
+                Id = inspection.Id,
+                CompanyName = inspection.AffiliatedCompanyName,
+                Status = GetStatusDisplay(inspection.Status),
+                StatusColor = GetStatusColor(inspection.Status),
+                StatusBackgroundColor = GetStatusBackgroundColor(inspection.Status),
+                DateRange = $"{inspection.StartedAt:dd/MM/yyyy HH:mm} - {(inspection.CompletedAt?.ToString("dd/MM/yyyy HH:mm") ?? "En proceso")}",
+                PhotosInfo = $"{inspection.AnalyzedPhotosCount} de {inspection.PhotosCount} fotos analizadas"
+            }).ToList();
+            
+            cancellationToken.ThrowIfCancellationRequested();
+            
+            // Actualizar UI una sola vez en el hilo principal (más eficiente)
+            MainThread.BeginInvokeOnMainThread(() => UpdateInspectionsCollection(viewModels));
+        }
+        catch (OperationCanceledException)
+        {
+            // Carga cancelada, no hacer nada
+            throw;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Error al cargar inspecciones: {ex}");
-            await DisplayAlertAsync("Error", "No se pudieron cargar las inspecciones.", "OK");
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
+                await DisplayAlertAsync("Error", "No se pudieron cargar las inspecciones.", "OK");
+            }).ConfigureAwait(false);
         }
     }
+    
+    /// <summary>
+    /// Método legacy para compatibilidad. Usa LoadInspectionsAsync internamente.
+    /// </summary>
+    private async Task LoadInspections()
+    {
+        await LoadInspectionsAsync(_loadCancellationToken?.Token ?? CancellationToken.None);
+    }
 
-    private void OnCompanyFilterChanged(object? sender, EventArgs e)
+    private async void OnCompanyFilterChanged(object? sender, EventArgs e)
     {
         if (CompanyFilterPicker.SelectedItem is string selectedItem)
         {
@@ -139,8 +222,43 @@ public partial class InspectionHistoryPage : ContentPage
                 _selectedCompanyFilter = company?.Id;
             }
             
-            _ = LoadInspections();
+            // Al cambiar el filtro, forzar recarga
+            // Cancelar carga anterior si existe
+            _loadCancellationToken?.Cancel();
+            await LoadInspectionsAsync(_loadCancellationToken?.Token ?? CancellationToken.None);
+            _lastLoadTime = DateTime.Now; // Actualizar tiempo de carga
         }
+    }
+    
+    /// <summary>
+    /// Fuerza la recarga de datos (útil después de crear una nueva inspección).
+    /// </summary>
+    public async Task RefreshDataAsync()
+    {
+        _isDataLoaded = false;
+        _lastLoadTime = null;
+        
+        // Cancelar carga anterior si existe
+        _loadCancellationToken?.Cancel();
+        
+        // Cargar en background sin bloquear
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await LoadDataAsync().ConfigureAwait(false);
+                _isDataLoaded = true;
+                _lastLoadTime = DateTime.Now;
+            }
+            catch (OperationCanceledException)
+            {
+                // Carga cancelada, no hacer nada
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error al refrescar datos: {ex}");
+            }
+        });
     }
 
     private async void OnViewDetailsClicked(object? sender, EventArgs e)
@@ -195,6 +313,42 @@ public partial class InspectionHistoryPage : ContentPage
         LoadingIndicator.IsVisible = isLoading;
     }
 
+    // Métodos auxiliares para MainThread.BeginInvokeOnMainThread
+    private void SetLoadingTrue()
+    {
+        SetLoading(true);
+    }
+
+    private void SetLoadingFalse()
+    {
+        SetLoading(false);
+    }
+
+    private void UpdateCompanyFilter()
+    {
+        var companyList = new List<string> { "Todas las empresas" };
+        if (_companies != null)
+        {
+            companyList.AddRange(_companies.Select(c => c.Name));
+        }
+        CompanyFilterPicker.ItemsSource = companyList;
+    }
+
+    private void HideCompanyFilter()
+    {
+        CompanyFilterPicker.IsVisible = false;
+    }
+
+    private void UpdateInspectionsCollection(List<InspectionViewModel> viewModels)
+    {
+        _inspections.Clear();
+        // Agregar todos de una vez (más eficiente que uno por uno)
+        foreach (var vm in viewModels)
+        {
+            _inspections.Add(vm);
+        }
+    }
+
     private void StartStatusCheckTimer()
     {
         // Verificar estado de inspecciones cada 30 segundos
@@ -215,32 +369,68 @@ public partial class InspectionHistoryPage : ContentPage
     {
         try
         {
+            // Solo verificar si la página está visible y hay datos cargados
+            if (!IsVisible || !_isDataLoaded)
+                return;
+            
             // Verificar inspecciones que están en proceso
             var analyzingInspections = _inspections.Where(i => i.Status == "Analizando").ToList();
+            
+            // Si no hay inspecciones analizando, no hacer nada
+            if (analyzingInspections.Count == 0)
+                return;
             
             foreach (var inspection in analyzingInspections)
             {
                 try
                 {
-                    var status = await _apiClient.GetAnalysisStatusAsync(inspection.Id);
+                    var status = await _apiClient.GetAnalysisStatusAsync(inspection.Id).ConfigureAwait(false);
                     
                     if (status.Status == "Completed")
                     {
                         // Notificar al usuario
                         await _notificationService.ShowNotificationAsync(
                             "Análisis Completado",
-                            $"El análisis de la inspección para {inspection.CompanyName} ha sido completado.");
+                            $"El análisis de la inspección para {inspection.CompanyName} ha sido completado.").ConfigureAwait(false);
                         
-                        // Recargar la lista
-                        await LoadInspections();
+                        // Recargar la lista (en background)
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await LoadInspectionsAsync(_loadCancellationToken?.Token ?? CancellationToken.None).ConfigureAwait(false);
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                // Ignorar cancelación
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Error al recargar inspecciones: {ex}");
+                            }
+                        });
                     }
                     else if (status.Status == "Failed")
                     {
                         await _notificationService.ShowNotificationAsync(
                             "Análisis Fallido",
-                            $"El análisis de la inspección para {inspection.CompanyName} ha fallado.");
+                            $"El análisis de la inspección para {inspection.CompanyName} ha fallado.").ConfigureAwait(false);
                         
-                        await LoadInspections();
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await LoadInspectionsAsync(_loadCancellationToken?.Token ?? CancellationToken.None).ConfigureAwait(false);
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                // Ignorar cancelación
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Error al recargar inspecciones: {ex}");
+                            }
+                        });
                     }
                 }
                 catch (Exception ex)
@@ -269,4 +459,5 @@ public class InspectionViewModel
     public string DateRange { get; set; } = string.Empty;
     public string PhotosInfo { get; set; } = string.Empty;
 }
+
 
