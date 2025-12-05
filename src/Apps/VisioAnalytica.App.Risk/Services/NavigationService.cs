@@ -191,6 +191,7 @@ public class NavigationService : INavigationService
 	/// <summary>
 	/// Cambia a la tab de Historial en el TabbedPage y refresca los datos.
 	/// Si no existe un TabbedPage, navega normalmente a InspectionHistoryPage.
+	/// NO bloquea la navegación - el refresh se ejecuta en background.
 	/// </summary>
 	public async Task NavigateToHistoryTabAsync()
 	{
@@ -205,11 +206,22 @@ public class NavigationService : INavigationService
 				var historyNavPage = tabbedPage.Children[2] as NavigationPage;
 				if (historyNavPage?.CurrentPage is InspectionHistoryPage historyPage)
 				{
-					// Cambiar a la tab de Historial
+					// Cambiar a la tab de Historial (sin bloquear)
 					tabbedPage.CurrentPage = historyNavPage;
 					
-					// Refrescar los datos
-					await historyPage.RefreshDataAsync();
+					// Refrescar los datos en background SIN bloquear la navegación
+					// Esto permite que el usuario cambie de tab inmediatamente
+					_ = Task.Run(async () =>
+					{
+						try
+						{
+							await historyPage.RefreshDataAsync().ConfigureAwait(false);
+						}
+						catch (Exception ex)
+						{
+							System.Diagnostics.Debug.WriteLine($"Error al refrescar datos en background: {ex}");
+						}
+					});
 					return;
 				}
 			}

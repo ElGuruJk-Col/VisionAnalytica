@@ -133,6 +133,47 @@ public class InspectionController : ControllerBase
             return StatusCode(500, new { message = "Error interno del servidor." });
         }
     }
+    
+    /// <summary>
+    /// Obtiene las inspecciones del usuario autenticado con paginación.
+    /// </summary>
+    [HttpGet("my-inspections/paged")]
+    [ProducesResponseType(typeof(PagedResult<InspectionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<PagedResult<InspectionDto>>> GetMyInspectionsPaged(
+        [FromQuery] int pageNumber = 1, 
+        [FromQuery] int pageSize = 20, 
+        [FromQuery] Guid? affiliatedCompanyId = null)
+    {
+        var userId = GetCurrentUserId();
+        var organizationId = GetOrganizationIdFromClaims();
+
+        if (!userId.HasValue || !organizationId.HasValue)
+        {
+            return Unauthorized("Usuario no autenticado o token inválido.");
+        }
+
+        try
+        {
+            var result = await _inspectionService.GetMyInspectionsPagedAsync(
+                userId.Value, 
+                organizationId.Value, 
+                pageNumber, 
+                pageSize, 
+                affiliatedCompanyId);
+            
+            _logger.LogInformation(
+                "Retornando página {PageNumber} de {TotalPages} para usuario {UserId}. Items: {ItemCount}/{TotalCount}",
+                result.PageNumber, result.TotalPages, userId.Value, result.Items.Count, result.TotalCount);
+            
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al obtener inspecciones paginadas para usuario {UserId}", userId);
+            return StatusCode(500, new { message = "Error interno del servidor." });
+        }
+    }
 
     /// <summary>
     /// Obtiene los detalles de una inspección específica.

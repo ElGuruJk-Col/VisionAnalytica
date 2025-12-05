@@ -67,3 +67,16 @@ public record InspectionAnalysisStatusDto(
     string? ErrorMessage
 );
 
+/// <summary>
+/// DTO para respuesta paginada de inspecciones.
+/// </summary>
+public record PagedResult<T>(
+    List<T> Items,
+    int PageNumber,
+    int PageSize,
+    int TotalCount,
+    int TotalPages,
+    bool HasPreviousPage,
+    bool HasNextPage
+);
+

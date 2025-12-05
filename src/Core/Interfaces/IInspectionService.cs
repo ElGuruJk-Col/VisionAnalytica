@@ -18,6 +18,16 @@ public interface IInspectionService
     /// Obtiene las inspecciones del usuario autenticado.
     /// </summary>
     Task<List<InspectionDto>> GetMyInspectionsAsync(Guid userId, Guid organizationId, Guid? affiliatedCompanyId = null);
+    
+    /// <summary>
+    /// Obtiene las inspecciones del usuario autenticado con paginación.
+    /// </summary>
+    Task<PagedResult<InspectionDto>> GetMyInspectionsPagedAsync(
+        Guid userId, 
+        Guid organizationId, 
+        int pageNumber = 1, 
+        int pageSize = 20, 
+        Guid? affiliatedCompanyId = null);
 
     /// <summary>
     /// Obtiene los detalles de una inspección específica.
