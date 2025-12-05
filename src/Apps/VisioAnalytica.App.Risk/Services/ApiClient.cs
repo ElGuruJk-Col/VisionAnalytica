@@ -364,6 +364,20 @@ public class ApiClient : IApiClient
         var result = await GetAsync<List<InspectionDto>>(endpoint);
         return result ?? [];
     }
+    
+    /// <summary>
+    /// Obtiene las inspecciones del usuario autenticado con paginación.
+    /// </summary>
+    public async Task<PagedResult<InspectionDto>> GetMyInspectionsPagedAsync(int pageNumber = 1, int pageSize = 20, Guid? affiliatedCompanyId = null)
+    {
+        var endpoint = $"/api/v1/Inspection/my-inspections/paged?pageNumber={pageNumber}&pageSize={pageSize}";
+        if (affiliatedCompanyId.HasValue)
+        {
+            endpoint += $"&affiliatedCompanyId={affiliatedCompanyId.Value}";
+        }
+        var result = await GetAsync<PagedResult<InspectionDto>>(endpoint);
+        return result ?? new PagedResult<InspectionDto>([], pageNumber, pageSize, 0, 0, false, false);
+    }
 
     /// <summary>
     /// Obtiene los detalles de una inspección específica.

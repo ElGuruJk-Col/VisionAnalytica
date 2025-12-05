@@ -146,37 +146,105 @@ public class InspectionService(
             }
         }
 
-        return inspections.Select(i =>
-        {
-            // Asegurar que las fotos estén cargadas - usar null-conditional para evitar errores
-            var photosCount = i.Photos?.Count ?? 0;
-            var analyzedCount = i.Photos?.Count(p => p.IsAnalyzed) ?? 0;
-            var findingsCount = i.Findings?.Count ?? 0;
-            
-            _logger.LogDebug(
-                "Inspección {InspectionId}: {PhotosCount} fotos totales, {AnalyzedCount} analizadas, {FindingsCount} hallazgos",
-                i.Id, photosCount, analyzedCount, findingsCount);
+        return inspections.Select(i => MapToDto(i)).ToList();
+    }
+    
+    public async Task<PagedResult<InspectionDto>> GetMyInspectionsPagedAsync(
+        Guid userId, 
+        Guid organizationId, 
+        int pageNumber = 1, 
+        int pageSize = 20, 
+        Guid? affiliatedCompanyId = null)
+    {
+        if (pageNumber < 1) pageNumber = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 100) pageSize = 100; // Límite máximo
+        
+        var query = _context.Inspections
+            .Include(i => i.AffiliatedCompany)
+            .Include(i => i.Photos)
+            .Where(i => i.UserId == userId && i.OrganizationId == organizationId);
 
-            return new InspectionDto(
-                i.Id,
-                i.AffiliatedCompanyId,
-                i.AffiliatedCompany?.Name ?? "Sin nombre",
-                i.Status,
-                i.StartedAt,
-                i.CompletedAt,
-                photosCount,
-                analyzedCount,
-                findingsCount,
-                i.Photos?.Select(p => new PhotoInfoDto(
-                    p.Id,
-                    p.ImageUrl,
-                    p.CapturedAt,
-                    p.Description,
-                    p.IsAnalyzed,
-                    p.AnalysisInspectionId
-                )).ToList() ?? []
-            );
-        }).ToList();
+        if (affiliatedCompanyId.HasValue)
+        {
+            query = query.Where(i => i.AffiliatedCompanyId == affiliatedCompanyId.Value);
+        }
+
+        // Obtener total antes de paginar
+        var totalCount = await query.CountAsync();
+        
+        // Aplicar paginación
+        var inspections = await query
+            .Include(i => i.Findings)
+            .OrderByDescending(i => i.StartedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        _logger.LogInformation(
+            "Obteniendo página {PageNumber} de inspecciones para usuario {UserId}. Total: {TotalCount}, Página: {PageSize}",
+            pageNumber, userId, totalCount, pageSize);
+        
+        // Verificar que las fotos se cargaron correctamente
+        foreach (var inspection in inspections)
+        {
+            var photosInMemory = inspection.Photos?.Count ?? 0;
+            var photosInDb = await _context.Photos.CountAsync(p => p.InspectionId == inspection.Id);
+            
+            if (photosInMemory != photosInDb)
+            {
+                _logger.LogWarning(
+                    "DISCREPANCIA en inspección {InspectionId}: {MemoryCount} fotos en memoria vs {DbCount} en BD. Recargando...",
+                    inspection.Id, photosInMemory, photosInDb);
+                
+                await _context.Entry(inspection).Collection(i => i.Photos).LoadAsync();
+            }
+        }
+
+        var items = inspections.Select(i => MapToDto(i)).ToList();
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+        
+        return new PagedResult<InspectionDto>(
+            items,
+            pageNumber,
+            pageSize,
+            totalCount,
+            totalPages,
+            pageNumber > 1,
+            pageNumber < totalPages
+        );
+    }
+    
+    private InspectionDto MapToDto(Core.Models.Inspection i)
+    {
+        // Asegurar que las fotos estén cargadas - usar null-conditional para evitar errores
+        var photosCount = i.Photos?.Count ?? 0;
+        var analyzedCount = i.Photos?.Count(p => p.IsAnalyzed) ?? 0;
+        var findingsCount = i.Findings?.Count ?? 0;
+        
+        _logger.LogDebug(
+            "Inspección {InspectionId}: {PhotosCount} fotos totales, {AnalyzedCount} analizadas, {FindingsCount} hallazgos",
+            i.Id, photosCount, analyzedCount, findingsCount);
+
+        return new InspectionDto(
+            i.Id,
+            i.AffiliatedCompanyId,
+            i.AffiliatedCompany?.Name ?? "Sin nombre",
+            i.Status,
+            i.StartedAt,
+            i.CompletedAt,
+            photosCount,
+            analyzedCount,
+            findingsCount,
+            i.Photos?.Select(p => new PhotoInfoDto(
+                p.Id,
+                p.ImageUrl,
+                p.CapturedAt,
+                p.Description,
+                p.IsAnalyzed,
+                p.AnalysisInspectionId
+            )).ToList() ?? []
+        );
     }
 
     public async Task<InspectionDto?> GetInspectionByIdAsync(Guid inspectionId, Guid userId, Guid organizationId)
