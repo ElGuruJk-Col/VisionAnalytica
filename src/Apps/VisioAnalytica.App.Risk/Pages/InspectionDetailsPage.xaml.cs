@@ -1,8 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Net.Http;
-using System.Security.Cryptography;
-using System.Text;
-using Microsoft.Maui.Storage;
 using VisioAnalytica.App.Risk.Services;
 using VisioAnalytica.Core.Models.Dtos;
 
@@ -27,12 +24,10 @@ public partial class InspectionDetailsPage : ContentPage
         Timeout = TimeSpan.FromSeconds(30)
     };
     
-    // Semáforo para limitar descargas concurrentes (máximo 3 imágenes a la vez)
-    private static readonly SemaphoreSlim _downloadSemaphore = new(3, 3);
-    
-    // Caché de rutas de imágenes (URL -> ruta local)
-    private static readonly Dictionary<string, string> _imageCache = new();
-    private static readonly object _cacheLock = new();
+    // Control de lazy loading
+    private const int InitialLoadCount = 5; // Cargar primeras 5 imágenes inmediatamente
+    private int _loadedCount = 0;
+    private bool _isLoadingMore = false;
 
     public InspectionDetailsPage(IApiClient apiClient, IAuthService authService, Guid? inspectionId = null)
     {
@@ -41,6 +36,10 @@ public partial class InspectionDetailsPage : ContentPage
         _authService = authService;
         _inspectionId = inspectionId;
         PhotosCollection.ItemsSource = _photoFindings;
+        
+        // Configurar lazy loading
+        PhotosCollection.RemainingItemsThreshold = 2; // Cargar más cuando queden 2 items por mostrar
+        PhotosCollection.RemainingItemsThresholdReached += OnRemainingItemsThresholdReached;
     }
 
     protected override async void OnAppearing()
@@ -134,107 +133,51 @@ public partial class InspectionDetailsPage : ContentPage
                 // ⚠️ CORRECCIÓN: Obtener AffiliatedCompanyId de la inspección para validación de acceso
                 var affiliatedCompanyId = _inspection.AffiliatedCompanyId;
                 
-                // OPTIMIZACIÓN: Cargar imágenes de forma progresiva (no esperar a todas)
-                // Primero agregar todas las fotos sin imágenes (placeholder)
-                var photoViewModels = new List<PhotoFindingViewModel>();
-                foreach (var photo in _inspection.Photos.OrderBy(p => p.CapturedAt))
+                // Preparar todas las fotos primero
+                var photoTasks = new List<Task<PhotoFindingViewModel>>();
+                var photosList = _inspection.Photos.OrderBy(p => p.CapturedAt).ToList();
+                
+                foreach (var photo in photosList)
                 {
-                    var imageUrl = photo.ImageUrl.StartsWith("http") 
-                        ? photo.ImageUrl 
-                        : $"{baseUrl}{photo.ImageUrl}";
-                    
-                    // Convertir URL si es necesario
-                    if (imageUrl.Contains("/uploads/", StringComparison.Ordinal))
-                    {
-                        var parts = imageUrl.Split(UploadsSeparator, StringSplitOptions.None);
-                        if (parts.Length > 1)
-                        {
-                            var orgAndFile = parts[1];
-                            imageUrl = $"{baseUrl}/api/v1/file/images/{orgAndFile}?affiliatedCompanyId={affiliatedCompanyId}";
-                        }
-                    }
-                    else if (imageUrl.Contains("/api/v1/file/images/", StringComparison.Ordinal))
-                    {
-                        if (!imageUrl.Contains("affiliatedCompanyId=", StringComparison.Ordinal))
-                        {
-                            var separator = imageUrl.Contains('?') ? "&" : "?";
-                            imageUrl = $"{imageUrl}{separator}affiliatedCompanyId={affiliatedCompanyId}";
-                        }
-                    }
-                    
-                    // Hallazgos para esta foto
-                    List<FindingDetailDto> findings = [];
-                    if (photo.IsAnalyzed)
-                    {
-                        findings = allFindings;
-                    }
-                    
-                    var viewModel = new PhotoFindingViewModel
-                    {
-                        PhotoId = photo.Id,
-                        ImageUrl = imageUrl,
-                        ImageSource = null, // Se cargará después
-                        CapturedAt = photo.CapturedAt,
-                        Description = photo.Description,
-                        IsAnalyzed = photo.IsAnalyzed,
-                        Findings = [.. findings]
-                    };
-                    
-                    photoViewModels.Add(viewModel);
+                    // ⚠️ CORRECCIÓN: Pasar todos los hallazgos de la inspección y el AffiliatedCompanyId a cada foto
+                    var photoTask = ProcessPhotoAsync(photo, baseUrl, allFindings, affiliatedCompanyId);
+                    photoTasks.Add(photoTask);
                 }
                 
-                // Agregar todas las fotos a la UI inmediatamente (sin imágenes)
+                // OPTIMIZACIÓN: Cargar todas las fotos en paralelo (paralelismo real, sin límites)
+                // Cargar primero las primeras N imágenes para mostrar algo rápido
+                var initialPhotos = photoTasks.Take(InitialLoadCount).ToList();
+                var remainingPhotos = photoTasks.Skip(InitialLoadCount).ToList();
+                
+                // Cargar primeras imágenes inmediatamente
+                var initialResults = await Task.WhenAll(initialPhotos);
+                
+                // Actualizar UI con primeras imágenes
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    foreach (var viewModel in photoViewModels)
+                    foreach (var photoFinding in initialResults)
                     {
-                        _photoFindings.Add(viewModel);
+                        _photoFindings.Add(photoFinding);
                     }
+                    _loadedCount = initialResults.Length;
                 });
                 
-                // OPTIMIZACIÓN: Cargar imágenes en paralelo con límite de concurrencia
-                // Usar Task.Run para no bloquear el hilo principal
-                _ = Task.Run(async () =>
+                // Cargar el resto en background (lazy loading)
+                if (remainingPhotos.Count > 0)
                 {
-                    var loadTasks = photoViewModels.Select(async (viewModel, index) =>
+                    _ = Task.Run(async () =>
                     {
-                        var semaphoreAcquired = false;
-                        try
+                        var remainingResults = await Task.WhenAll(remainingPhotos);
+                        await MainThread.InvokeOnMainThreadAsync(() =>
                         {
-                            // Esperar turno para descargar (máximo 3 simultáneas)
-                            await _downloadSemaphore.WaitAsync();
-                            semaphoreAcquired = true; // Marcar como adquirido solo si WaitAsync() fue exitoso
-                            
-                            // Pequeño delay para no sobrecargar (opcional)
-                            if (index > 0)
+                            foreach (var photoFinding in remainingResults)
                             {
-                                await Task.Delay(index * 100); // 100ms entre cada inicio de descarga
+                                _photoFindings.Add(photoFinding);
                             }
-                            
-                            var imageSource = await LoadImageSecurelyAsync(viewModel.ImageUrl);
-                            
-                            // Actualizar UI en el hilo principal
-                            await MainThread.InvokeOnMainThreadAsync(() =>
-                            {
-                                viewModel.ImageSource = imageSource;
-                            });
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"❌ Error al cargar imagen {viewModel.ImageUrl}: {ex.Message}");
-                        }
-                        finally
-                        {
-                            // Solo liberar el semáforo si fue adquirido exitosamente
-                            if (semaphoreAcquired)
-                            {
-                                _downloadSemaphore.Release();
-                            }
-                        }
+                            _loadedCount = _photoFindings.Count;
+                        });
                     });
-                    
-                    await Task.WhenAll(loadTasks);
-                });
+                }
             }
             else
             {
@@ -320,7 +263,7 @@ public partial class InspectionDetailsPage : ContentPage
                 }
             }
             
-            // Cargar la imagen de forma segura (en background thread)
+            // Cargar la imagen de forma segura (con optimización automática)
             var imageSource = await LoadImageSecurelyAsync(imageUrl);
             
             return new PhotoFindingViewModel
@@ -378,7 +321,7 @@ public partial class InspectionDetailsPage : ContentPage
 
     /// <summary>
     /// Carga una imagen de forma segura usando el endpoint protegido del FileController.
-    /// Incluye caché local para evitar descargas repetidas.
+    /// Soporta parámetros de optimización del servidor (width, quality).
     /// </summary>
     private async Task<ImageSource?> LoadImageSecurelyAsync(string imageUrl)
     {
@@ -391,55 +334,27 @@ public partial class InspectionDetailsPage : ContentPage
                 return null;
             }
 
-            // OPTIMIZACIÓN: Verificar caché local primero
-            string? cachedPath = null;
-            lock (_cacheLock)
-            {
-                if (_imageCache.TryGetValue(imageUrl, out var path) && File.Exists(path))
-                {
-                    cachedPath = path;
-                }
-            }
-            
-            if (cachedPath != null)
-            {
-                System.Diagnostics.Debug.WriteLine($"✅ Imagen cargada desde caché: {imageUrl}");
-                return ImageSource.FromFile(cachedPath);
-            }
+            // OPTIMIZACIÓN: Agregar parámetros de compresión/redimensionamiento si el servidor los soporta
+            // Formato: ?width=800&quality=80 (si el servidor implementa estos parámetros)
+            var optimizedUrl = AddImageOptimizationParams(imageUrl);
 
-            // Si no está en caché, descargar
             _imageHttpClient.DefaultRequestHeaders.Authorization = 
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _authService.CurrentToken);
             
-            var response = await _imageHttpClient.GetAsync(imageUrl);
+            var response = await _imageHttpClient.GetAsync(optimizedUrl);
             if (response.IsSuccessStatusCode)
             {
                 var imageBytes = await response.Content.ReadAsByteArrayAsync();
                 
-                // OPTIMIZACIÓN: Guardar en caché local
-                var cachePath = await SaveImageToCacheAsync(imageUrl, imageBytes);
+                // Crear ImageSource desde bytes
+                var imageSource = ImageSource.FromStream(() => new MemoryStream(imageBytes));
                 
-                if (cachePath != null)
-                {
-                    lock (_cacheLock)
-                    {
-                        _imageCache[imageUrl] = cachePath;
-                    }
-                    
-                    System.Diagnostics.Debug.WriteLine($"✅ Imagen descargada y guardada en caché: {imageUrl}");
-                    return ImageSource.FromFile(cachePath);
-                }
-                else
-                {
-                    // Si falla el guardado en caché, usar memoria
-                    var imageSource = ImageSource.FromStream(() => new MemoryStream(imageBytes));
-                    System.Diagnostics.Debug.WriteLine($"✅ Imagen cargada desde servidor (sin caché): {imageUrl}");
-                    return imageSource;
-                }
+                System.Diagnostics.Debug.WriteLine($"✅ Imagen cargada exitosamente desde el servidor: {optimizedUrl}");
+                return imageSource;
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error al cargar imagen desde servidor: {response.StatusCode} - {response.ReasonPhrase}. URL: {imageUrl}");
+                System.Diagnostics.Debug.WriteLine($"❌ Error al cargar imagen desde servidor: {response.StatusCode} - {response.ReasonPhrase}. URL: {optimizedUrl}");
                 return null;
             }
         }
@@ -461,102 +376,51 @@ public partial class InspectionDetailsPage : ContentPage
     }
     
     /// <summary>
-    /// Guarda una imagen en el caché local del dispositivo.
+    /// Agrega parámetros de optimización a la URL de la imagen si el servidor los soporta.
+    /// Parámetros: width (ancho máximo), quality (calidad de compresión 0-100).
     /// </summary>
-    private async Task<string?> SaveImageToCacheAsync(string imageUrl, byte[] imageBytes)
+    private static string AddImageOptimizationParams(string imageUrl)
     {
-        try
+        // Si la URL ya tiene parámetros de optimización, no agregar más
+        if (imageUrl.Contains("width=", StringComparison.OrdinalIgnoreCase) || 
+            imageUrl.Contains("quality=", StringComparison.OrdinalIgnoreCase))
         {
-            // Generar nombre de archivo único basado en la URL
-            var hash = ComputeHash(imageUrl);
-            var fileName = $"{hash}.jpg";
-            
-            // Obtener directorio de caché
-            var cacheDir = FileSystem.CacheDirectory;
-            var imageCacheDir = Path.Combine(cacheDir, "inspection_images");
-            
-            if (!Directory.Exists(imageCacheDir))
-            {
-                Directory.CreateDirectory(imageCacheDir);
-            }
-            
-            var filePath = Path.Combine(imageCacheDir, fileName);
-            
-            // Guardar archivo
-            await File.WriteAllBytesAsync(filePath, imageBytes);
-            
-            // Limpiar caché antiguo si es necesario (mantener máximo 100MB)
-            _ = Task.Run(() => CleanOldCacheFiles(imageCacheDir));
-            
-            return filePath;
+            return imageUrl;
         }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"⚠️ Error al guardar imagen en caché: {ex.Message}");
-            return null;
-        }
+        
+        // Agregar parámetros de optimización para reducir tamaño de descarga
+        // Estos parámetros deben ser implementados en el FileController del servidor
+        var separator = imageUrl.Contains('?') ? "&" : "?";
+        return $"{imageUrl}{separator}width=1200&quality=85";
     }
     
     /// <summary>
-    /// Limpia archivos antiguos del caché si excede el tamaño máximo.
+    /// Maneja el evento de lazy loading cuando el usuario se acerca al final de la lista.
     /// </summary>
-    private void CleanOldCacheFiles(string cacheDir)
+    private async void OnRemainingItemsThresholdReached(object? sender, EventArgs e)
     {
+        if (_isLoadingMore || _inspection == null)
+            return;
+            
+        _isLoadingMore = true;
+        
         try
         {
-            const long maxCacheSize = 100 * 1024 * 1024; // 100MB
-            
-            var files = Directory.GetFiles(cacheDir)
-                .Select(f => new FileInfo(f))
-                .OrderBy(f => f.LastWriteTime)
-                .ToList();
-            
-            long totalSize = files.Sum(f => f.Length);
-            
-            // Si excede el tamaño máximo, eliminar los más antiguos
-            if (totalSize > maxCacheSize)
+            // Si ya cargamos todas las imágenes, no hacer nada
+            if (_loadedCount >= _photoFindings.Count)
             {
-                foreach (var file in files)
-                {
-                    if (totalSize <= maxCacheSize)
-                        break;
-                    
-                    try
-                    {
-                        totalSize -= file.Length;
-                        file.Delete();
-                        
-                        // Limpiar del diccionario de caché
-                        lock (_cacheLock)
-                        {
-                            var keyToRemove = _imageCache.FirstOrDefault(kvp => kvp.Value == file.FullName).Key;
-                            if (keyToRemove != null)
-                            {
-                                _imageCache.Remove(keyToRemove);
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        // Ignorar errores al eliminar
-                    }
-                }
+                _isLoadingMore = false;
+                return;
             }
+            
+            // Las imágenes restantes ya se están cargando en background desde LoadInspectionDetails
+            // Este método es principalmente para logging/debugging
+            System.Diagnostics.Debug.WriteLine($"📸 Lazy loading: Usuario cerca del final, {_photoFindings.Count - _loadedCount} imágenes pendientes");
         }
-        catch
+        finally
         {
-            // Ignorar errores en limpieza
+            _isLoadingMore = false;
         }
-    }
-    
-    /// <summary>
-    /// Calcula un hash MD5 de una cadena para usar como nombre de archivo.
-    /// </summary>
-    private static string ComputeHash(string input)
-    {
-        using var md5 = MD5.Create();
-        var hashBytes = md5.ComputeHash(Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 }
 
