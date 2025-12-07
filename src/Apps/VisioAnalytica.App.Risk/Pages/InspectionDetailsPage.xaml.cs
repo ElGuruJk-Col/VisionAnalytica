@@ -1,5 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.Maui.Storage;
 using VisioAnalytica.App.Risk.Services;
 using VisioAnalytica.Core.Models.Dtos;
 
@@ -23,6 +26,13 @@ public partial class InspectionDetailsPage : ContentPage
     {
         Timeout = TimeSpan.FromSeconds(30)
     };
+    
+    // Semáforo para limitar descargas concurrentes (máximo 3 imágenes a la vez)
+    private static readonly SemaphoreSlim _downloadSemaphore = new(3, 3);
+    
+    // Caché de rutas de imágenes (URL -> ruta local)
+    private static readonly Dictionary<string, string> _imageCache = new();
+    private static readonly object _cacheLock = new();
 
     public InspectionDetailsPage(IApiClient apiClient, IAuthService authService, Guid? inspectionId = null)
     {
@@ -124,27 +134,100 @@ public partial class InspectionDetailsPage : ContentPage
                 // ⚠️ CORRECCIÓN: Obtener AffiliatedCompanyId de la inspección para validación de acceso
                 var affiliatedCompanyId = _inspection.AffiliatedCompanyId;
                 
-                // Preparar todas las fotos primero (sin cargar imágenes aún)
-                var photoTasks = new List<Task<PhotoFindingViewModel>>();
-                
+                // OPTIMIZACIÓN: Cargar imágenes de forma progresiva (no esperar a todas)
+                // Primero agregar todas las fotos sin imágenes (placeholder)
+                var photoViewModels = new List<PhotoFindingViewModel>();
                 foreach (var photo in _inspection.Photos.OrderBy(p => p.CapturedAt))
                 {
-                    // ⚠️ CORRECCIÓN: Pasar todos los hallazgos de la inspección y el AffiliatedCompanyId a cada foto
-                    // (ya que los hallazgos están en la inspección, no en fotos individuales)
-                    var photoTask = ProcessPhotoAsync(photo, baseUrl, allFindings, affiliatedCompanyId);
-                    photoTasks.Add(photoTask);
+                    var imageUrl = photo.ImageUrl.StartsWith("http") 
+                        ? photo.ImageUrl 
+                        : $"{baseUrl}{photo.ImageUrl}";
+                    
+                    // Convertir URL si es necesario
+                    if (imageUrl.Contains("/uploads/", StringComparison.Ordinal))
+                    {
+                        var parts = imageUrl.Split(UploadsSeparator, StringSplitOptions.None);
+                        if (parts.Length > 1)
+                        {
+                            var orgAndFile = parts[1];
+                            imageUrl = $"{baseUrl}/api/v1/file/images/{orgAndFile}?affiliatedCompanyId={affiliatedCompanyId}";
+                        }
+                    }
+                    else if (imageUrl.Contains("/api/v1/file/images/", StringComparison.Ordinal))
+                    {
+                        if (!imageUrl.Contains("affiliatedCompanyId=", StringComparison.Ordinal))
+                        {
+                            var separator = imageUrl.Contains('?') ? "&" : "?";
+                            imageUrl = $"{imageUrl}{separator}affiliatedCompanyId={affiliatedCompanyId}";
+                        }
+                    }
+                    
+                    // Hallazgos para esta foto
+                    List<FindingDetailDto> findings = [];
+                    if (photo.IsAnalyzed)
+                    {
+                        findings = allFindings;
+                    }
+                    
+                    var viewModel = new PhotoFindingViewModel
+                    {
+                        PhotoId = photo.Id,
+                        ImageUrl = imageUrl,
+                        ImageSource = null, // Se cargará después
+                        CapturedAt = photo.CapturedAt,
+                        Description = photo.Description,
+                        IsAnalyzed = photo.IsAnalyzed,
+                        Findings = [.. findings]
+                    };
+                    
+                    photoViewModels.Add(viewModel);
                 }
                 
-                // Cargar todas las fotos en paralelo (pero limitado para no sobrecargar)
-                var photos = await Task.WhenAll(photoTasks);
-                
-                // Actualizar UI en el hilo principal
+                // Agregar todas las fotos a la UI inmediatamente (sin imágenes)
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    foreach (var photoFinding in photos)
+                    foreach (var viewModel in photoViewModels)
                     {
-                        _photoFindings.Add(photoFinding);
+                        _photoFindings.Add(viewModel);
                     }
+                });
+                
+                // OPTIMIZACIÓN: Cargar imágenes en paralelo con límite de concurrencia
+                // Usar Task.Run para no bloquear el hilo principal
+                _ = Task.Run(async () =>
+                {
+                    var loadTasks = photoViewModels.Select(async (viewModel, index) =>
+                    {
+                        try
+                        {
+                            // Esperar turno para descargar (máximo 3 simultáneas)
+                            await _downloadSemaphore.WaitAsync();
+                            
+                            // Pequeño delay para no sobrecargar (opcional)
+                            if (index > 0)
+                            {
+                                await Task.Delay(index * 100); // 100ms entre cada inicio de descarga
+                            }
+                            
+                            var imageSource = await LoadImageSecurelyAsync(viewModel.ImageUrl);
+                            
+                            // Actualizar UI en el hilo principal
+                            await MainThread.InvokeOnMainThreadAsync(() =>
+                            {
+                                viewModel.ImageSource = imageSource;
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"❌ Error al cargar imagen {viewModel.ImageUrl}: {ex.Message}");
+                        }
+                        finally
+                        {
+                            _downloadSemaphore.Release();
+                        }
+                    });
+                    
+                    await Task.WhenAll(loadTasks);
                 });
             }
             else
@@ -289,8 +372,7 @@ public partial class InspectionDetailsPage : ContentPage
 
     /// <summary>
     /// Carga una imagen de forma segura usando el endpoint protegido del FileController.
-    /// Incluye el token de autenticación en la petición.
-    /// Usa un HttpClient compartido para evitar agotamiento de sockets.
+    /// Incluye caché local para evitar descargas repetidas.
     /// </summary>
     private async Task<ImageSource?> LoadImageSecurelyAsync(string imageUrl)
     {
@@ -303,22 +385,51 @@ public partial class InspectionDetailsPage : ContentPage
                 return null;
             }
 
-            // Usar HttpClient compartido para descargar la imagen con autenticación
-            // Limpiar headers anteriores y establecer el nuevo token
+            // OPTIMIZACIÓN: Verificar caché local primero
+            string? cachedPath = null;
+            lock (_cacheLock)
+            {
+                if (_imageCache.TryGetValue(imageUrl, out var path) && File.Exists(path))
+                {
+                    cachedPath = path;
+                }
+            }
+            
+            if (cachedPath != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"✅ Imagen cargada desde caché: {imageUrl}");
+                return ImageSource.FromFile(cachedPath);
+            }
+
+            // Si no está en caché, descargar
             _imageHttpClient.DefaultRequestHeaders.Authorization = 
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _authService.CurrentToken);
             
-            // Descargar la imagen como bytes
             var response = await _imageHttpClient.GetAsync(imageUrl);
             if (response.IsSuccessStatusCode)
             {
                 var imageBytes = await response.Content.ReadAsByteArrayAsync();
                 
-                // Crear ImageSource desde bytes (más eficiente que desde stream)
-                var imageSource = ImageSource.FromStream(() => new MemoryStream(imageBytes));
+                // OPTIMIZACIÓN: Guardar en caché local
+                var cachePath = await SaveImageToCacheAsync(imageUrl, imageBytes);
                 
-                System.Diagnostics.Debug.WriteLine($"✅ Imagen cargada exitosamente desde el servidor: {imageUrl}");
-                return imageSource;
+                if (cachePath != null)
+                {
+                    lock (_cacheLock)
+                    {
+                        _imageCache[imageUrl] = cachePath;
+                    }
+                    
+                    System.Diagnostics.Debug.WriteLine($"✅ Imagen descargada y guardada en caché: {imageUrl}");
+                    return ImageSource.FromFile(cachePath);
+                }
+                else
+                {
+                    // Si falla el guardado en caché, usar memoria
+                    var imageSource = ImageSource.FromStream(() => new MemoryStream(imageBytes));
+                    System.Diagnostics.Debug.WriteLine($"✅ Imagen cargada desde servidor (sin caché): {imageUrl}");
+                    return imageSource;
+                }
             }
             else
             {
@@ -341,6 +452,105 @@ public partial class InspectionDetailsPage : ContentPage
             System.Diagnostics.Debug.WriteLine($"❌ Error al cargar imagen de forma segura: {ex.Message}. URL: {imageUrl}");
             return null;
         }
+    }
+    
+    /// <summary>
+    /// Guarda una imagen en el caché local del dispositivo.
+    /// </summary>
+    private async Task<string?> SaveImageToCacheAsync(string imageUrl, byte[] imageBytes)
+    {
+        try
+        {
+            // Generar nombre de archivo único basado en la URL
+            var hash = ComputeHash(imageUrl);
+            var fileName = $"{hash}.jpg";
+            
+            // Obtener directorio de caché
+            var cacheDir = FileSystem.CacheDirectory;
+            var imageCacheDir = Path.Combine(cacheDir, "inspection_images");
+            
+            if (!Directory.Exists(imageCacheDir))
+            {
+                Directory.CreateDirectory(imageCacheDir);
+            }
+            
+            var filePath = Path.Combine(imageCacheDir, fileName);
+            
+            // Guardar archivo
+            await File.WriteAllBytesAsync(filePath, imageBytes);
+            
+            // Limpiar caché antiguo si es necesario (mantener máximo 100MB)
+            _ = Task.Run(() => CleanOldCacheFiles(imageCacheDir));
+            
+            return filePath;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"⚠️ Error al guardar imagen en caché: {ex.Message}");
+            return null;
+        }
+    }
+    
+    /// <summary>
+    /// Limpia archivos antiguos del caché si excede el tamaño máximo.
+    /// </summary>
+    private void CleanOldCacheFiles(string cacheDir)
+    {
+        try
+        {
+            const long maxCacheSize = 100 * 1024 * 1024; // 100MB
+            
+            var files = Directory.GetFiles(cacheDir)
+                .Select(f => new FileInfo(f))
+                .OrderBy(f => f.LastWriteTime)
+                .ToList();
+            
+            long totalSize = files.Sum(f => f.Length);
+            
+            // Si excede el tamaño máximo, eliminar los más antiguos
+            if (totalSize > maxCacheSize)
+            {
+                foreach (var file in files)
+                {
+                    if (totalSize <= maxCacheSize)
+                        break;
+                    
+                    try
+                    {
+                        totalSize -= file.Length;
+                        file.Delete();
+                        
+                        // Limpiar del diccionario de caché
+                        lock (_cacheLock)
+                        {
+                            var keyToRemove = _imageCache.FirstOrDefault(kvp => kvp.Value == file.FullName).Key;
+                            if (keyToRemove != null)
+                            {
+                                _imageCache.Remove(keyToRemove);
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Ignorar errores al eliminar
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Ignorar errores en limpieza
+        }
+    }
+    
+    /// <summary>
+    /// Calcula un hash MD5 de una cadena para usar como nombre de archivo.
+    /// </summary>
+    private static string ComputeHash(string input)
+    {
+        using var md5 = MD5.Create();
+        var hashBytes = md5.ComputeHash(Encoding.UTF8.GetBytes(input));
+        return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 }
 
