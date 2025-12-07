@@ -1,4 +1,5 @@
 using System.Runtime.Versioning;
+using Microsoft.Maui.ApplicationModel;
 using VisioAnalytica.App.Risk.Models;
 using VisioAnalytica.App.Risk.Services;
 
@@ -85,6 +86,8 @@ public partial class LoginPage : ContentPage
      {
         try
         {
+            System.Diagnostics.Debug.WriteLine("[Login] OnLoginClicked START");
+
             // Validación básica
             if (string.IsNullOrWhiteSpace(EmailEntry.Text) || 
                 string.IsNullOrWhiteSpace(PasswordEntry.Text))
@@ -99,21 +102,27 @@ public partial class LoginPage : ContentPage
 
             // Intentar login
             var request = new LoginRequest(EmailEntry.Text.Trim(), PasswordEntry.Text);
+            System.Diagnostics.Debug.WriteLine($"[Login] Enviando login para: {request.Email}");
             var response = await GetAuthService().LoginAsync(request);
+            System.Diagnostics.Debug.WriteLine($"[Login] LoginAsync returned. Response is null: {response == null}");
 
             if (response != null)
             {
+                System.Diagnostics.Debug.WriteLine($"[Login] Token length: {(response.Token?.Length ?? 0)}; Email: {response.Email}; MustChangePassword: {response.MustChangePassword}");
+
                 // Verificar si debe cambiar la contraseña
                 if (GetAuthService().MustChangePassword)
                 {
+                    System.Diagnostics.Debug.WriteLine("[Login] MustChangePassword = true -> NavigateToChangePasswordAsync");
                     // Redirigir a la página de cambio de contraseña
-                    await GetNavigationService().NavigateToChangePasswordAsync();
+                    await MainThread.InvokeOnMainThreadAsync(async () => await GetNavigationService().NavigateToChangePasswordAsync());
                     return;
                 }
                 
                 // Verificar si es Inspector y tiene empresas asignadas
                 var authService = GetAuthService();
                 var roles = authService.CurrentUserRoles;
+                System.Diagnostics.Debug.WriteLine($"[Login] Roles: {string.Join(',', roles)}");
                 
                 if (roles.Contains("Inspector"))
                 {
@@ -121,6 +130,7 @@ public partial class LoginPage : ContentPage
                     {
                         var apiClient = GetApiClient();
                         var companies = await apiClient.GetMyCompaniesAsync();
+                        System.Diagnostics.Debug.WriteLine($"[Login] GetMyCompaniesAsync returned {companies?.Count ?? 0}");
                         
                         if (companies == null || companies.Count == 0)
                         {
@@ -128,10 +138,12 @@ public partial class LoginPage : ContentPage
                             await apiClient.NotifyInspectorWithoutCompaniesAsync();
                             
                             // Mostrar mensaje y bloquear acceso
-                            await DisplayAlertAsync(
-                                "Acceso Deshabilitado",
-                                "Tu ingreso está deshabilitado, debes tener al menos una empresa asignada. Se ha notificado a tu superior.",
-                                "OK");
+                            await MainThread.InvokeOnMainThreadAsync(async () =>
+                            {
+                                await DisplayAlert("Acceso Deshabilitado",
+                                    "Tu ingreso está deshabilitado, debes tener al menos una empresa asignada. Se ha notificado a tu superior.",
+                                    "OK");
+                            });
                             
                             // Cerrar sesión
                             await authService.LogoutAsync();
@@ -152,7 +164,17 @@ public partial class LoginPage : ContentPage
                 }
                 
                 // Login exitoso - navegar a la página principal
-                await GetNavigationService().NavigateToMainAsync();
+                System.Diagnostics.Debug.WriteLine("[Login] Navegando a Main");
+                await MainThread.InvokeOnMainThreadAsync(async () =>
+                {
+                    await GetNavigationService().NavigateToMainAsync();
+                    // Debug alert to confirm navigation (temporary)
+                    try
+                    {
+                        await DisplayAlert("Debug", "Login exitoso. Navegando a Main.", "OK");
+                    }
+                    catch { }
+                });
             }
             else
             {
@@ -187,6 +209,7 @@ public partial class LoginPage : ContentPage
         finally
         {
             SetLoading(false);
+            System.Diagnostics.Debug.WriteLine("[Login] OnLoginClicked END");
         }
     }
 

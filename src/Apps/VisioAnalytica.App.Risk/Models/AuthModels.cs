@@ -26,8 +26,22 @@ public record AuthResponse(
     string Email,
     string FirstName,
     string Token,
+    string? RefreshToken = null,
     bool MustChangePassword = false,
     IList<string>? Roles = null
+);
+
+/// <summary>
+/// Modelo para solicitar renovación de token usando refresh token.
+/// </summary>
+public record RefreshTokenRequest(string RefreshToken);
+
+/// <summary>
+/// Modelo de respuesta al renovar token.
+/// </summary>
+public record RefreshTokenResponse(
+    string AccessToken,
+    string RefreshToken
 );
 
 /// <summary>

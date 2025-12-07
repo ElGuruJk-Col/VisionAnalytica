@@ -61,5 +61,28 @@ public interface IAuthService
     /// Restablece la contraseña con un token.
     /// </summary>
     Task<bool> ResetPasswordAsync(ResetPasswordRequest request);
+
+    /// <summary>
+    /// Verifica si el token actual ha expirado.
+    /// </summary>
+    bool IsTokenExpired();
+
+    /// <summary>
+    /// Verifica si el token expirará pronto (dentro del umbral especificado).
+    /// </summary>
+    /// <param name="threshold">Umbral de tiempo antes de la expiración. Por defecto: 1 hora.</param>
+    bool IsTokenExpiringSoon(TimeSpan? threshold = null);
+
+    /// <summary>
+    /// Obtiene el tiempo restante hasta que el token expire.
+    /// </summary>
+    /// <returns>TimeSpan con el tiempo restante, o null si el token no existe o ya expiró.</returns>
+    TimeSpan? GetTokenTimeRemaining();
+
+    /// <summary>
+    /// Renueva el access token usando el refresh token guardado.
+    /// </summary>
+    /// <returns>True si la renovación fue exitosa, false en caso contrario.</returns>
+    Task<bool> RefreshTokenAsync();
 }
 

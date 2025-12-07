@@ -14,6 +14,7 @@ public partial class CapturePage : ContentPage
     private byte[]? _capturedImageBytes;
     private IList<AffiliatedCompanyDto>? _assignedCompanies;
     private AffiliatedCompanyDto? _selectedCompany;
+    private bool _isAnalyzing;
 
     // Constructor con DI - Los servicios son requeridos y siempre se inyectan desde MauiProgram
     public CapturePage(IAnalysisService analysisService, INavigationDataService navigationDataService, IApiClient apiClient, IAuthService authService, INavigationService? navigationService = null)
@@ -345,8 +346,31 @@ public partial class CapturePage : ContentPage
 
     private async void OnAnalyzeClicked(object? sender, EventArgs e)
     {
+        // ═══════════════════════════════════════════════════════════════
+        // PROTECCIÓN CONTRA DOBLE CLIC - DEBE SER LO PRIMERO
+        // ═══════════════════════════════════════════════════════════════
+        if (_isAnalyzing)
+        {
+            System.Diagnostics.Debug.WriteLine("⚠️ OnAnalyzeClicked: Ya está analizando, ignorando clic duplicado");
+            return;
+        }
+        
+        // Deshabilitar botón INMEDIATAMENTE (antes de cualquier operación asíncrona)
+        if (AnalyzeButton != null)
+        {
+            AnalyzeButton.IsEnabled = false;
+        }
+        
+        // Establecer flag ANTES de cualquier operación asíncrona
+        _isAnalyzing = true;
+        
         if (_capturedImageBytes == null || _capturedImageBytes.Length == 0)
         {
+            _isAnalyzing = false;
+            if (AnalyzeButton != null)
+            {
+                AnalyzeButton.IsEnabled = true;
+            }
             await DisplayAlertAsync("Error", "No hay imagen para analizar", "OK");
             return;
         }
@@ -420,7 +444,12 @@ public partial class CapturePage : ContentPage
             }
             finally
             {
+                _isAnalyzing = false;
                 SetLoading(false);
+                if (AnalyzeButton != null)
+                {
+                    AnalyzeButton.IsEnabled = true;
+                }
             }
             
             return; // Salir temprano para SuperAdmin
@@ -430,6 +459,11 @@ public partial class CapturePage : ContentPage
         // Validar empresa seleccionada
         if (_selectedCompany == null)
         {
+            _isAnalyzing = false;
+            if (AnalyzeButton != null)
+            {
+                AnalyzeButton.IsEnabled = true;
+            }
             await DisplayAlertAsync(
                 "Empresa Requerida",
                 "Debes seleccionar una empresa cliente antes de analizar.",
@@ -462,8 +496,13 @@ public partial class CapturePage : ContentPage
 
             if (inspection == null)
             {
-                await DisplayAlertAsync("Error", "No se pudo crear la inspección.", "OK");
+                _isAnalyzing = false;
                 SetLoading(false);
+                if (AnalyzeButton != null)
+                {
+                    AnalyzeButton.IsEnabled = true;
+                }
+                await DisplayAlertAsync("Error", "No se pudo crear la inspección.", "OK");
                 return;
             }
 
@@ -476,8 +515,13 @@ public partial class CapturePage : ContentPage
             var photoId = inspection.Photos.FirstOrDefault()?.Id;
             if (!photoId.HasValue)
             {
-                await DisplayAlertAsync("Error", "No se pudo obtener el ID de la foto.", "OK");
+                _isAnalyzing = false;
                 SetLoading(false);
+                if (AnalyzeButton != null)
+                {
+                    AnalyzeButton.IsEnabled = true;
+                }
+                await DisplayAlertAsync("Error", "No se pudo obtener el ID de la foto.", "OK");
                 return;
             }
 
@@ -502,6 +546,9 @@ public partial class CapturePage : ContentPage
             PlaceholderLabel.IsVisible = true;
             AnalyzeButton.IsEnabled = false;
 
+            // Resetear estado de análisis después de éxito
+            _isAnalyzing = false;
+
             await DisplayAlertAsync(
                 "Análisis Iniciado",
                 "El análisis se está procesando en segundo plano. Puedes ver el progreso en el historial de inspecciones.",
@@ -515,16 +562,33 @@ public partial class CapturePage : ContentPage
         catch (ApiException ex)
         {
             System.Diagnostics.Debug.WriteLine($"❌ ApiException al analizar: {ex.Message} (Status: {ex.StatusCode})");
+            _isAnalyzing = false;
+            SetLoading(false);
+            if (AnalyzeButton != null)
+            {
+                AnalyzeButton.IsEnabled = true;
+            }
             await DisplayAlertAsync("Error", $"Error al iniciar el análisis: {ex.Message}", "OK");
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"❌ Error inesperado al analizar: {ex}");
             System.Diagnostics.Debug.WriteLine($"   StackTrace: {ex.StackTrace}");
+            _isAnalyzing = false;
+            SetLoading(false);
+            if (AnalyzeButton != null)
+            {
+                AnalyzeButton.IsEnabled = true;
+            }
             await DisplayAlertAsync("Error", "Ocurrió un error inesperado al iniciar el análisis. Por favor, intenta nuevamente.", "OK");
         }
         finally
         {
+            // Asegurar que el estado se resetee incluso si hay errores no capturados
+            if (_isAnalyzing)
+            {
+                _isAnalyzing = false;
+            }
             SetLoading(false);
         }
     }

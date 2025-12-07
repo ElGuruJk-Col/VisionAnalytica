@@ -1,4 +1,5 @@
 using VisioAnalytica.Core.Models.Dtos;
+using VisioAnalytica.App.Risk.Models;
 
 namespace VisioAnalytica.App.Risk.Services;
 
@@ -81,5 +82,10 @@ public interface IApiClient
     /// Obtiene el historial de inspecciones de la organización (para Admin/Supervisor).
     /// </summary>
     Task<List<InspectionSummaryDto>> GetOrganizationHistoryAsync();
+
+    /// <summary>
+    /// Renueva el access token usando un refresh token.
+    /// </summary>
+    Task<RefreshTokenResponse?> RefreshTokenAsync(string refreshToken);
 }
 

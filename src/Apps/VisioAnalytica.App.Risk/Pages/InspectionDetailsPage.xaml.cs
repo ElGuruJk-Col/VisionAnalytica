@@ -95,6 +95,20 @@ public partial class InspectionDetailsPage : ContentPage
             
             if (_inspection != null)
             {
+                // ⚠️ CORRECCIÓN: Obtener hallazgos directamente de la inspección (no de AnalysisId)
+                List<FindingDetailDto> allFindings = [];
+                try
+                {
+                    // Los hallazgos ahora están directamente en la inspección, no en inspecciones de análisis separadas
+                    allFindings = await _apiClient.GetInspectionFindingsAsync(_inspection.Id);
+                    System.Diagnostics.Debug.WriteLine($"✅ Hallazgos cargados para inspección {_inspection.Id}: {allFindings.Count} hallazgos");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"⚠️ Error al cargar hallazgos para inspección {_inspection.Id}: {ex.Message}");
+                    allFindings = [];
+                }
+                
                 // Actualizar información de la inspección en el hilo principal
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
@@ -107,12 +121,17 @@ public partial class InspectionDetailsPage : ContentPage
                 // Construir URL base una sola vez
                 var baseUrl = _apiClient.BaseUrl.TrimEnd('/');
                 
+                // ⚠️ CORRECCIÓN: Obtener AffiliatedCompanyId de la inspección para validación de acceso
+                var affiliatedCompanyId = _inspection.AffiliatedCompanyId;
+                
                 // Preparar todas las fotos primero (sin cargar imágenes aún)
                 var photoTasks = new List<Task<PhotoFindingViewModel>>();
                 
                 foreach (var photo in _inspection.Photos.OrderBy(p => p.CapturedAt))
                 {
-                    var photoTask = ProcessPhotoAsync(photo, baseUrl);
+                    // ⚠️ CORRECCIÓN: Pasar todos los hallazgos de la inspección y el AffiliatedCompanyId a cada foto
+                    // (ya que los hallazgos están en la inspección, no en fotos individuales)
+                    var photoTask = ProcessPhotoAsync(photo, baseUrl, allFindings, affiliatedCompanyId);
                     photoTasks.Add(photoTask);
                 }
                 
@@ -171,24 +190,19 @@ public partial class InspectionDetailsPage : ContentPage
     /// <summary>
     /// Procesa una foto individual: carga hallazgos e imagen.
     /// </summary>
-    private async Task<PhotoFindingViewModel> ProcessPhotoAsync(PhotoInfoDto photo, string baseUrl)
+    private async Task<PhotoFindingViewModel> ProcessPhotoAsync(PhotoInfoDto photo, string baseUrl, List<FindingDetailDto> inspectionFindings, Guid affiliatedCompanyId)
     {
         try
         {
+            // ⚠️ CORRECCIÓN: Usar los hallazgos de la inspección directamente
+            // Ya no usamos photo.AnalysisId porque los hallazgos están en la inspección original
             List<FindingDetailDto> findings = [];
             
-            // Si la foto está analizada, obtener sus hallazgos
-            if (photo.IsAnalyzed && photo.AnalysisId.HasValue)
+            // Si la foto está analizada, usar los hallazgos de la inspección
+            if (photo.IsAnalyzed)
             {
-                try
-                {
-                    findings = await _apiClient.GetInspectionFindingsAsync(photo.AnalysisId.Value);
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Error al cargar hallazgos para foto {photo.Id}: {ex.Message}");
-                    findings = [];
-                }
+                findings = inspectionFindings; // Usar los hallazgos de la inspección
+                System.Diagnostics.Debug.WriteLine($"Foto {photo.Id} analizada: {findings.Count} hallazgos asignados");
             }
             
             // Construir URL completa de la imagen
@@ -203,7 +217,17 @@ public partial class InspectionDetailsPage : ContentPage
                 if (parts.Length > 1)
                 {
                     var orgAndFile = parts[1];
-                    imageUrl = $"{baseUrl}/api/v1/file/images/{orgAndFile}";
+                    // ⚠️ CORRECCIÓN: Agregar affiliatedCompanyId como query parameter para validación de acceso
+                    imageUrl = $"{baseUrl}/api/v1/file/images/{orgAndFile}?affiliatedCompanyId={affiliatedCompanyId}";
+                }
+            }
+            else if (imageUrl.Contains("/api/v1/file/images/", StringComparison.Ordinal))
+            {
+                // Si ya es una URL del endpoint, agregar el query parameter si no existe
+                if (!imageUrl.Contains("affiliatedCompanyId=", StringComparison.Ordinal))
+                {
+                    var separator = imageUrl.Contains('?') ? "&" : "?";
+                    imageUrl = $"{imageUrl}{separator}affiliatedCompanyId={affiliatedCompanyId}";
                 }
             }
             
@@ -236,7 +260,17 @@ public partial class InspectionDetailsPage : ContentPage
                 if (parts.Length > 1)
                 {
                     var orgAndFile = parts[1];
-                    imageUrl = $"{baseUrl}/api/v1/file/images/{orgAndFile}";
+                    // ⚠️ CORRECCIÓN: Agregar affiliatedCompanyId como query parameter para validación de acceso
+                    imageUrl = $"{baseUrl}/api/v1/file/images/{orgAndFile}?affiliatedCompanyId={affiliatedCompanyId}";
+                }
+            }
+            else if (imageUrl.Contains("/api/v1/file/images/", StringComparison.Ordinal))
+            {
+                // Si ya es una URL del endpoint, agregar el query parameter si no existe
+                if (!imageUrl.Contains("affiliatedCompanyId=", StringComparison.Ordinal))
+                {
+                    var separator = imageUrl.Contains('?') ? "&" : "?";
+                    imageUrl = $"{imageUrl}{separator}affiliatedCompanyId={affiliatedCompanyId}";
                 }
             }
             

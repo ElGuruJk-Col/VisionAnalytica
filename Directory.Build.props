@@ -1,8 +1,35 @@
 <Project>
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- Solo aplicar TargetFramework genérico si NO es un proyecto MAUI -->
+    <!-- Los proyectos MAUI usan TargetFrameworks (plural) con frameworks específicos -->
+    <TargetFramework Condition="'$(UseMaui)' != 'true'">net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- OPTIMIZACIONES DE COMPILACIÓN PARA DESARROLLO                  -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    
+    <!-- Símbolos de depuración optimizados (portable es más rápido que full) -->
+    <DebugType Condition="'$(Configuration)' == 'Debug'">portable</DebugType>
+    <DebugSymbols Condition="'$(Configuration)' == 'Debug'">true</DebugSymbols>
+    
+    <!-- Deshabilitar determinismo en Debug (acelera compilación) -->
+    <Deterministic Condition="'$(Configuration)' == 'Debug'">false</Deterministic>
+    
+    <!-- Habilitar compilación compartida (reutiliza procesos) -->
+    <UseSharedCompilation Condition="'$(Configuration)' == 'Debug'">true</UseSharedCompilation>
+    
+    <!-- Optimizar compilación incremental -->
+    <IncrementalBuild Condition="'$(Configuration)' == 'Debug'">true</IncrementalBuild>
+    
+    <!-- Deshabilitar analizadores en Debug para acelerar (opcional, comentar si necesitas análisis) -->
+    <!-- <RunAnalyzersDuringBuild Condition="'$(Configuration)' == 'Debug'">false</RunAnalyzersDuringBuild> -->
+    
+    <!-- Optimizaciones para Release (mantener calidad) -->
+    <DebugType Condition="'$(Configuration)' == 'Release'">pdbonly</DebugType>
+    <Deterministic Condition="'$(Configuration)' == 'Release'">true</Deterministic>
+    <Optimize Condition="'$(Configuration)' == 'Release'">true</Optimize>
   </PropertyGroup>
 
   <ItemGroup>

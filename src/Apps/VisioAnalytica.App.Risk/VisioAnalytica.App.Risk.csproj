@@ -4,11 +4,16 @@
        PROPIEDADES GENERALES
        ───────────────────────────── -->
   <PropertyGroup>
+    <!-- Frameworks específicos de MAUI - NO usar net10.0 genérico -->
     <TargetFrameworks>net10.0-android;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
 
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">
       $(TargetFrameworks);net10.0-windows10.0.19041.0
     </TargetFrameworks>
+    
+    <!-- Evitar que MSBuild intente compilar para frameworks genéricos -->
+    <DisableMauiAnalyzers>false</DisableMauiAnalyzers>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
 
     <UseMaui>true</UseMaui>
     <SingleProject>true</SingleProject>

@@ -12,6 +12,7 @@ public class NavigationService : INavigationService
 {
 	private readonly IServiceProvider _serviceProvider;
 	private NavigationPage? _currentNavigationPage;
+	private bool _initialPageReplaced = false;
 
 	public NavigationService(IServiceProvider serviceProvider)
 	{
@@ -19,12 +20,75 @@ public class NavigationService : INavigationService
 	}
 
 	/// <summary>
-	/// Obtiene la página inicial de la aplicación (LoginPage).
+	/// Obtiene la página inicial de la aplicación (NO resuelve LoginPage para evitar dependencias tempranas).
+	/// Devuelve una NavigationPage con un placeholder ligero y en background empuja la LoginPage real.
 	/// </summary>
 	public Page GetInitialPage()
 	{
-		var loginPage = _serviceProvider.GetRequiredService<LoginPage>();
-		_currentNavigationPage = new NavigationPage(loginPage);
+		// Crear una página placeholder muy ligera para evitar resolver páginas complejas en el startup
+		var placeholderContent = new VerticalStackLayout
+		{
+			HorizontalOptions = LayoutOptions.Center,
+			VerticalOptions = LayoutOptions.Center,
+			Children =
+			{
+				new ActivityIndicator { IsRunning = true, IsVisible = true },
+				new Label { Text = "Inicializando...", HorizontalTextAlignment = TextAlignment.Center }
+			}
+		};
+
+		var placeholderPage = new ContentPage { Content = placeholderContent };
+		_currentNavigationPage = new NavigationPage(placeholderPage);
+
+		// Empujar la página de login asíncronamente para no bloquear el startup ni forzar la resolución temprana
+		_ = Task.Run(async () =>
+		{
+			try
+			{
+				// Pequeña espera para permitir que la Window se cree
+				await Task.Delay(150);
+				var loginPage = _serviceProvider.GetRequiredService<LoginPage>();
+				await MainThread.InvokeOnMainThreadAsync(async () =>
+				{
+					if (_currentNavigationPage != null && !_initialPageReplaced)
+					{
+						// Reemplazar la root con una NavigationPage que contenga LoginPage
+						var newNav = new NavigationPage(loginPage);
+						var window = Application.Current?.Windows?.FirstOrDefault();
+						// Solo reemplazar si la window actual sigue apuntando al placeholder que creamos
+						if (window != null)
+						{
+							if (window.Page == _currentNavigationPage)
+							{
+								window.Page = newNav;
+								_currentNavigationPage = newNav;
+								_initialPageReplaced = true;
+							}
+							else
+							{
+								// No reemplazar porque otra navegación ya ocurrió
+								_initialPageReplaced = true;
+							}
+						}
+						else
+						{
+							// Si no hay Window todavía, solo hacer PushAsync sobre la navigation actual
+							// Pero asegurarnos de no empujar si ya fue reemplazado
+							if (!_initialPageReplaced)
+							{
+								await _currentNavigationPage.Navigation.PushAsync(loginPage);
+								_initialPageReplaced = true;
+							}
+						}
+					}
+				});
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"Error al inicializar LoginPage en background: {ex}");
+			}
+		});
+
 		return _currentNavigationPage;
 	}
 
@@ -64,6 +128,7 @@ public class NavigationService : INavigationService
 		{
 			window.Page = navPage;
 			_currentNavigationPage = navPage;
+			_initialPageReplaced = true;
 		}
 		else
 		{
@@ -111,6 +176,7 @@ public class NavigationService : INavigationService
 			var newNavPage = new NavigationPage(tabbedPage);
 			window.Page = newNavPage;
 			_currentNavigationPage = newNavPage;
+			_initialPageReplaced = true;
 		}
 	}
 

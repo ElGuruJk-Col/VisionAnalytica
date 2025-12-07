@@ -27,16 +27,22 @@ public class AnalysisOrchestrator(
 
     public async Task AnalyzeInspectionPhotosAsync(Guid inspectionId, List<Guid> photoIds, Guid userId)
     {
+        var jobId = Guid.NewGuid();
+        _logger.LogInformation(
+            "🔵 [AnalysisOrchestrator] JOB INICIADO - JobId: {JobId}, InspectionId: {InspectionId}, PhotoCount: {PhotoCount}, UserId: {UserId}, Time: {Time}",
+            jobId, inspectionId, photoIds.Count, userId, DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff"));
+        
         try
         {
             _logger.LogInformation("Iniciando análisis de inspección {InspectionId} con {PhotoCount} fotos", 
                 inspectionId, photoIds.Count);
 
-            // Obtener la inspección
+            // Obtener la inspección (asegurar que está siendo rastreada)
             var inspection = await _context.Inspections
                 .Include(i => i.User)
                 .Include(i => i.AffiliatedCompany)
                 .Include(i => i.Photos)
+                .Include(i => i.Findings) // ⚠️ Incluir Findings para evitar problemas de tracking
                 .FirstOrDefaultAsync(i => i.Id == inspectionId);
 
             if (inspection == null)
@@ -45,9 +51,22 @@ public class AnalysisOrchestrator(
                 return;
             }
 
-            // Actualizar estado a "Analyzing"
+            _logger.LogInformation(
+                "Inspección {InspectionId} cargada. Estado actual: {Status}, Hallazgos existentes: {FindingsCount}",
+                inspectionId, inspection.Status, inspection.Findings?.Count ?? 0);
+
+            // Verificar que la inspección está siendo rastreada (no debería ser null)
+            var entry = _context.Entry(inspection);
+            _logger.LogInformation(
+                "Estado de tracking de inspección {InspectionId}: {State}",
+                inspectionId, entry.State);
+
+            // Actualizar estado a "Analyzing" (guardar inmediatamente para marcar inicio)
             inspection.Status = "Analyzing";
-            await _context.SaveChangesAsync();
+            var initialSave = await _context.SaveChangesAsync();
+            _logger.LogInformation(
+                "Estado de inspección {InspectionId} actualizado a 'Analyzing'. Entidades afectadas: {Entries}",
+                inspectionId, initialSave);
 
             var analyzedCount = 0;
             var failedCount = 0;
@@ -83,52 +102,118 @@ public class AnalysisOrchestrator(
                         null
                     );
 
-                    // Realizar análisis
+                    // Realizar análisis (skipPersistence = true para evitar crear inspecciones duplicadas)
                     var analysisResult = await _analysisService.PerformSstAnalysisAsync(
                         analysisRequest,
                         userId.ToString(),
-                        inspection.OrganizationId);
+                        inspection.OrganizationId,
+                        skipPersistence: true); // ⚠️ IMPORTANTE: No crear inspección aquí, solo obtener resultados
 
                     if (analysisResult != null)
                     {
-                        // Crear una nueva inspección para los resultados del análisis de esta foto
-                        var analysisInspection = new Inspection
-                        {
-                            Id = Guid.NewGuid(),
-                            UserId = userId,
-                            OrganizationId = inspection.OrganizationId,
-                            AffiliatedCompanyId = inspection.AffiliatedCompanyId,
-                            ImageUrl = photo.ImageUrl,
-                            Status = "Completed",
-                            StartedAt = DateTime.UtcNow,
-                            CompletedAt = DateTime.UtcNow,
-                            AnalysisDate = DateTime.UtcNow
-                        };
-
-                        // Agregar hallazgos
+                        // ═══════════════════════════════════════════════════════════════
+                        // CORRECCIÓN: Agregar hallazgos directamente a la inspección original
+                        // NO crear nuevas inspecciones
+                        // ═══════════════════════════════════════════════════════════════
+                        
+                        // Agregar hallazgos directamente a la inspección original
                         if (analysisResult.Hallazgos != null && analysisResult.Hallazgos.Count > 0)
                         {
+                            // ⚠️ CRÍTICO: Asegurar que la inspección está siendo rastreada como Modified, no Added
+                            var inspectionEntry = _context.Entry(inspection);
+                            if (inspectionEntry.State == Microsoft.EntityFrameworkCore.EntityState.Detached)
+                            {
+                                _logger.LogError("ERROR CRÍTICO: La inspección {InspectionId} está en estado Detached. Re-attaching...", inspection.Id);
+                                _context.Attach(inspection);
+                                inspectionEntry.State = Microsoft.EntityFrameworkCore.EntityState.Modified; // ⚠️ Marcar como Modified, no Added
+                            }
+                            else if (inspectionEntry.State == Microsoft.EntityFrameworkCore.EntityState.Added)
+                            {
+                                _logger.LogError("ERROR CRÍTICO: La inspección {InspectionId} está en estado Added. Cambiando a Modified...", inspection.Id);
+                                inspectionEntry.State = Microsoft.EntityFrameworkCore.EntityState.Modified; // ⚠️ Cambiar a Modified
+                            }
+                            
+                            _logger.LogInformation(
+                                "Agregando {Count} hallazgos a la inspección {InspectionId}. Estado: {State}, Hallazgos actuales antes: {CurrentCount}",
+                                analysisResult.Hallazgos.Count, inspection.Id, inspectionEntry.State, inspection.Findings?.Count ?? 0);
+                            
+                            // ⚠️ CRÍTICO: Agregar hallazgos directamente al contexto en lugar de a través de la colección de navegación
+                            // Esto evita que Entity Framework marque la inspección como nueva
                             foreach (var hallazgo in analysisResult.Hallazgos)
                             {
-                                analysisInspection.Findings.Add(new Finding
+                                var finding = new Finding
                                 {
                                     Id = Guid.NewGuid(),
-                                    InspectionId = analysisInspection.Id,
+                                    InspectionId = inspection.Id, // ⚠️ Usar la inspección original
                                     Description = hallazgo.Descripcion,
                                     RiskLevel = hallazgo.NivelRiesgo,
                                     CorrectiveAction = hallazgo.AccionCorrectiva,
                                     PreventiveAction = hallazgo.AccionPreventiva
-                                });
+                                };
+                                
+                                // ⚠️ Agregar directamente al contexto, NO a través de la colección de navegación
+                                _context.Findings.Add(finding);
+                                
+                                _logger.LogDebug(
+                                    "Hallazgo {FindingId} agregado directamente al contexto para inspección {InspectionId}: {Description}",
+                                    finding.Id, inspection.Id, finding.Description);
                             }
+                            
+                            _logger.LogInformation(
+                                "Agregados {Count} hallazgos directamente al contexto para inspección {InspectionId}",
+                                analysisResult.Hallazgos.Count, inspection.Id);
                         }
 
-                        _context.Inspections.Add(analysisInspection);
-                        await _context.SaveChangesAsync();
-
-                        // Marcar la foto como analizada
+                        // Marcar la foto como analizada (sin crear nueva inspección)
                         photo.IsAnalyzed = true;
-                        photo.AnalysisInspectionId = analysisInspection.Id;
-                        await _context.SaveChangesAsync();
+                        photo.AnalysisInspectionId = null; // ⚠️ Ya no necesitamos referenciar otra inspección
+                        
+                        // ⚠️ Verificar estado antes de guardar
+                        var inspectionStateBeforeSave = _context.Entry(inspection).State;
+                        var findingsCountBeforeSave = inspection.Findings?.Count ?? 0;
+                        var inspectionIdBeforeSave = inspection.Id;
+                        _logger.LogInformation(
+                            "Estado de inspección {InspectionId} antes de SaveChanges: State={State}, Hallazgos={FindingsCount}",
+                            inspection.Id, inspectionStateBeforeSave, findingsCountBeforeSave);
+                        
+                        // ⚠️ Verificar que no hay inspecciones duplicadas antes de guardar
+                        var inspectionCountBeforeSave = await _context.Inspections.CountAsync(i => i.Id == inspection.Id);
+                        if (inspectionCountBeforeSave > 1)
+                        {
+                            _logger.LogError(
+                                "❌ ERROR CRÍTICO ANTES DE GUARDAR: Ya existen {Count} inspecciones con ID {InspectionId}",
+                                inspectionCountBeforeSave, inspection.Id);
+                        }
+                        
+                        // Guardar cambios en una sola transacción
+                        var savedEntries = await _context.SaveChangesAsync();
+                        
+                        // ⚠️ Verificar que el ID de la inspección no cambió (no se creó una nueva)
+                        if (inspection.Id != inspectionIdBeforeSave)
+                        {
+                            _logger.LogError(
+                                "❌ ERROR CRÍTICO: El ID de la inspección cambió de {OldId} a {NewId}. Se creó una nueva inspección!",
+                                inspectionIdBeforeSave, inspection.Id);
+                        }
+                        
+                        _logger.LogInformation(
+                            "SaveChanges completado para inspección {InspectionId}. Entidades afectadas: {SavedEntries}, Hallazgos después: {FindingsCount}",
+                            inspection.Id, savedEntries, inspection.Findings?.Count ?? 0);
+                        
+                        // Verificar que no se crearon nuevas inspecciones después de guardar
+                        var inspectionCountAfterSave = await _context.Inspections.CountAsync(i => i.Id == inspection.Id);
+                        if (inspectionCountAfterSave > 1)
+                        {
+                            _logger.LogError(
+                                "❌ ERROR CRÍTICO DESPUÉS DE GUARDAR: Se detectaron {Count} inspecciones con el mismo ID {InspectionId}",
+                                inspectionCountAfterSave, inspection.Id);
+                        }
+                        else if (inspectionCountAfterSave == 1)
+                        {
+                            _logger.LogInformation(
+                                "✅ Verificación OK: Solo existe 1 inspección con ID {InspectionId}",
+                                inspection.Id);
+                        }
                         
                         // Verificar que el cambio se guardó
                         var updatedPhoto = await _context.Photos.FindAsync(photoId);
@@ -186,8 +271,23 @@ public class AnalysisOrchestrator(
             await _context.SaveChangesAsync();
 
             _logger.LogInformation(
-                "Análisis de inspección {InspectionId} completado. Exitosos: {AnalyzedCount}, Fallidos: {FailedCount}. Estado final: {Status}",
-                inspectionId, analyzedCount, failedCount, inspection.Status);
+                "✅ [AnalysisOrchestrator] JOB COMPLETADO - JobId: {JobId}, InspectionId: {InspectionId}. Exitosos: {AnalyzedCount}, Fallidos: {FailedCount}. Estado final: {Status}",
+                jobId, inspectionId, analyzedCount, failedCount, inspection.Status);
+            
+            // ⚠️ Verificación final: contar inspecciones con este ID
+            var finalInspectionCount = await _context.Inspections.CountAsync(i => i.Id == inspectionId);
+            if (finalInspectionCount != 1)
+            {
+                _logger.LogError(
+                    "❌ [AnalysisOrchestrator] ERROR CRÍTICO - JobId: {JobId}, InspectionId: {InspectionId}. Se detectaron {Count} inspecciones con el mismo ID después de completar el análisis",
+                    jobId, inspectionId, finalInspectionCount);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "✅ [AnalysisOrchestrator] Verificación OK - JobId: {JobId}, InspectionId: {InspectionId}. Solo existe 1 inspección con este ID",
+                    jobId, inspectionId);
+            }
 
             // Enviar notificación por email
             if (inspection.User != null && !string.IsNullOrEmpty(inspection.User.Email))
@@ -199,12 +299,12 @@ public class AnalysisOrchestrator(
                     try
                     {
                         // Recargar inspección con TODOS los datos necesarios para el reporte
+                        // ⚠️ CORRECCIÓN: Los hallazgos ahora están directamente en la inspección original
                         var fullInspection = await _context.Inspections
                             .Include(i => i.User)
                             .Include(i => i.AffiliatedCompany)
                             .Include(i => i.Photos)
-                                .ThenInclude(p => p.AnalysisInspection)
-                                    .ThenInclude(ai => ai!.Findings)
+                            .Include(i => i.Findings) // ⚠️ Hallazgos directamente en la inspección
                             .FirstOrDefaultAsync(i => i.Id == inspectionId);
 
                         if (fullInspection != null)

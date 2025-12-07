@@ -60,24 +60,32 @@ public class InspectionController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<InspectionDto>> CreateInspection([FromBody] CreateInspectionDto request)
     {
+        var requestId = Guid.NewGuid();
         var userId = GetCurrentUserId();
         var organizationId = GetOrganizationIdFromClaims();
+        
+        _logger.LogInformation("🔵 [Controller] CreateInspection llamado - RequestId: {RequestId}, UserId: {UserId}, OrgId: {OrgId}, Fotos: {PhotoCount}, Time: {Time}", 
+            requestId, userId, organizationId, request.Photos?.Count ?? 0, DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff"));
 
         if (!userId.HasValue || !organizationId.HasValue)
         {
+            _logger.LogWarning("❌ [Controller] CreateInspection - Usuario no autenticado - RequestId: {RequestId}", requestId);
             return Unauthorized("Usuario no autenticado o token inválido.");
         }
 
         if (request.Photos == null || request.Photos.Count == 0)
         {
+            _logger.LogWarning("❌ [Controller] CreateInspection - Sin fotos - RequestId: {RequestId}", requestId);
             return BadRequest("Debe proporcionar al menos una foto.");
         }
 
         try
         {
+            _logger.LogInformation("🟢 [Controller] Creando inspección - RequestId: {RequestId}, EmpresaId: {CompanyId}", requestId, request.AffiliatedCompanyId);
             var inspection = await _inspectionService.CreateInspectionAsync(
                 request, userId.Value, organizationId.Value);
             
+            _logger.LogInformation("✅ [Controller] Inspección creada - RequestId: {RequestId}, InspectionId: {InspectionId}", requestId, inspection.Id);
             return Ok(inspection);
         }
         catch (InvalidOperationException ex)

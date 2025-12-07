@@ -111,6 +111,8 @@ namespace VisioAnalytica.Api.Extensions
             // Aquí consolidamos todo.
 
             // 4.A: Nuestro Servicio de Tokens (de la Tarea 30)
+            // TokenService requiere IConfiguration y VisioAnalyticaDbContext
+            // El contenedor de DI los resolverá automáticamente
             services.AddScoped<ITokenService, TokenService>();
 
             // 4.B: Nuestro Servicio de IA (¡El tuyo, v4.0!)
@@ -149,6 +151,9 @@ namespace VisioAnalytica.Api.Extensions
             
             // 4.K: ¡NUEVO REGISTRO! Orquestador de Análisis
             services.AddScoped<IAnalysisOrchestrator, AnalysisOrchestrator>();
+
+            // 4.L: ¡NUEVO REGISTRO! Servicio de limpieza de refresh tokens en segundo plano
+            services.AddHostedService<RefreshTokenCleanupService>();
 
             // 4.K: Configuración de Hangfire para análisis en segundo plano
             var connectionString = config.GetConnectionString("LocalSqlServerConnection");

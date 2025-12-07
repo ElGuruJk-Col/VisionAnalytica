@@ -24,6 +24,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    
+    <!-- Optimizaciones específicas para Infrastructure (tiene muchos paquetes) -->
+    <!-- Excluir analizadores de paquetes en Debug para acelerar compilación -->
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
   </PropertyGroup>
 
 </Project>

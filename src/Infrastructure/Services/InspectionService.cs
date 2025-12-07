@@ -252,6 +252,7 @@ public class InspectionService(
         var inspection = await _context.Inspections
             .Include(i => i.AffiliatedCompany)
             .Include(i => i.Photos)
+            .Include(i => i.Findings) // ⚠️ CRÍTICO: Incluir Findings para que se carguen los hallazgos
             .FirstOrDefaultAsync(i => i.Id == inspectionId && 
                                      i.UserId == userId && 
                                      i.OrganizationId == organizationId);

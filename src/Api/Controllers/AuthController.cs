@@ -163,5 +163,80 @@ namespace VisioAnalytica.Api.Controllers
                 return StatusCode(500, $"Error interno del servidor: {ex.Message}");
             }
         }
+
+        // --- Endpoint de Renovación de Token (Refresh Token) ---
+        [HttpPost("refresh")]
+        [AllowAnonymous] // No requiere autenticación (usa refresh token)
+        public async Task<ActionResult<RefreshTokenResponseDto>> RefreshToken([FromBody] RefreshTokenDto refreshTokenDto)
+        {
+            try
+            {
+                var result = await _authService.RefreshTokenAsync(refreshTokenDto.RefreshToken);
+                if (result == null)
+                {
+                    return Unauthorized(new { message = "Refresh token inválido, expirado o revocado." });
+                }
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        // --- Endpoint para Revocar un Refresh Token ---
+        [HttpPost("revoke-token")]
+        [Authorize] // Requiere autenticación
+        public async Task<ActionResult> RevokeToken([FromBody] RevokeTokenDto revokeTokenDto)
+        {
+            try
+            {
+                // Obtener el ID del usuario desde el token JWT
+                var userIdClaim = User.FindFirst("uid")?.Value;
+                if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+                {
+                    return Unauthorized("Token inválido o usuario no autenticado.");
+                }
+
+                // Obtener IP del cliente (opcional, para auditoría)
+                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+
+                var result = await _authService.RevokeTokenAsync(userId, revokeTokenDto.RefreshToken, ipAddress);
+                if (result)
+                {
+                    return Ok(new { message = "Token revocado correctamente." });
+                }
+
+                return BadRequest(new { message = "No se pudo revocar el token. Verifica que el token exista y te pertenezca." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
+
+        // --- Endpoint para Listar Refresh Tokens del Usuario ---
+        [HttpGet("my-tokens")]
+        [Authorize] // Requiere autenticación
+        public async Task<ActionResult<List<RefreshTokenInfoDto>>> GetMyTokens()
+        {
+            try
+            {
+                // Obtener el ID del usuario desde el token JWT
+                var userIdClaim = User.FindFirst("uid")?.Value;
+                if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+                {
+                    return Unauthorized("Token inválido o usuario no autenticado.");
+                }
+
+                var tokens = await _authService.GetMyRefreshTokensAsync(userId);
+                return Ok(tokens);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error interno del servidor: {ex.Message}");
+            }
+        }
     }
 }

@@ -22,86 +22,60 @@ public static class MauiProgram
 		builder.Logging.AddDebug();
 #endif
 
-		// Registrar servicios
-		builder.Services.AddSingleton<HttpClient>();
-		builder.Services.AddSingleton<IApiClient, ApiClient>();
-		builder.Services.AddSingleton<IAuthService, AuthService>();
-		builder.Services.AddSingleton<IAnalysisService, AnalysisService>();
+		// Registrar servicios base primero
+		// Configurar HttpClient con handler específico para Android si es necesario
+		builder.Services.AddSingleton<HttpClient>(sp =>
+		{
+			var httpClient = new HttpClient();
+#if ANDROID
+			// Configuración específica para Android
+			httpClient.Timeout = TimeSpan.FromSeconds(30); // Timeout más corto para detectar problemas más rápido
+#endif
+			return httpClient;
+		});
+		builder.Services.AddSingleton<INavigationService, NavigationService>();
 		builder.Services.AddSingleton<INavigationDataService, NavigationDataService>();
 		builder.Services.AddSingleton<INotificationService, NotificationService>();
-		builder.Services.AddSingleton<INavigationService, NavigationService>();
+		
+		// Registrar ApiClient primero usando factory para IAuthService (rompe dependencia circular)
+		// Esto permite que ApiClient se cree sin esperar a que AuthService esté completamente inicializado
+		builder.Services.AddSingleton<IApiClient>(sp => 
+		{
+			var httpClient = sp.GetRequiredService<HttpClient>();
+			var navService = sp.GetRequiredService<INavigationService>();
+			// Usar factory function para resolver IAuthService de forma diferida
+			// Esto evita la dependencia circular durante la inicialización
+			return new ApiClient(
+				httpClient,
+				() => sp.GetService<IAuthService>(), // Factory function para resolver IAuthService lazy
+				navService);
+		});
+		
+		// Registrar AuthService después de ApiClient (necesita IApiClient)
+		builder.Services.AddSingleton<IAuthService>(sp => 
+		{
+			var apiClient = sp.GetRequiredService<IApiClient>();
+			return new AuthService(apiClient);
+		});
+		
+		builder.Services.AddSingleton<IAnalysisService, AnalysisService>();
 
-		// Registrar páginas (LoginPage necesita IApiClient también)
-		builder.Services.AddTransient<Pages.LoginPage>(sp => 
-			new Pages.LoginPage(
-				sp.GetRequiredService<IAuthService>(),
-				sp.GetRequiredService<IApiClient>(),
-				sp.GetRequiredService<INavigationService>()));
-		builder.Services.AddTransient<Pages.RegisterPage>(sp =>
-			new Pages.RegisterPage(
-				sp.GetRequiredService<IAuthService>(),
-				sp.GetRequiredService<INavigationService>()));
-		// Mantener CapturePage para compatibilidad (puede ser eliminada después)
-		builder.Services.AddTransient<Pages.CapturePage>(sp => 
-			new Pages.CapturePage(
-				sp.GetRequiredService<IAnalysisService>(),
-				sp.GetRequiredService<INavigationDataService>(),
-				sp.GetRequiredService<IApiClient>(),
-				sp.GetRequiredService<IAuthService>(),
-				sp.GetRequiredService<INavigationService>()));
-		
-		// Nuevas páginas con diseño moderno
-		builder.Services.AddTransient<Pages.MultiCapturePage>(sp => 
-			new Pages.MultiCapturePage(
-				sp.GetRequiredService<IApiClient>(),
-				sp.GetRequiredService<IAuthService>(),
-				sp.GetRequiredService<INotificationService>(),
-				sp.GetRequiredService<INavigationService>()));
-		builder.Services.AddTransient<Pages.InspectionHistoryPage>(sp => 
-			new Pages.InspectionHistoryPage(
-				sp.GetRequiredService<IApiClient>(),
-				sp.GetRequiredService<IAuthService>(),
-				sp.GetRequiredService<INotificationService>(),
-				sp.GetRequiredService<INavigationService>()));
-		builder.Services.AddTransient<Pages.InspectionDetailsPage>(sp => 
-			new Pages.InspectionDetailsPage(
-				sp.GetRequiredService<IApiClient>(),
-				sp.GetRequiredService<IAuthService>()));
-		
-		builder.Services.AddTransient<Pages.ResultsPage>(sp =>
-			new Pages.ResultsPage(
-				sp.GetRequiredService<IApiClient>(),
-				sp.GetRequiredService<INavigationDataService>(),
-				sp.GetRequiredService<IAuthService>(),
-				sp.GetRequiredService<INavigationService>()));
-		builder.Services.AddTransient<Pages.HistoryPage>(sp =>
-			new Pages.HistoryPage(
-				sp.GetRequiredService<IApiClient>(),
-				sp.GetRequiredService<INavigationService>())); // Mantener para compatibilidad
-		builder.Services.AddTransient<Pages.ForgotPasswordPage>(sp =>
-			new Pages.ForgotPasswordPage(
-				sp.GetRequiredService<IAuthService>(),
-				sp.GetRequiredService<INavigationService>()));
-		builder.Services.AddTransient<Pages.ChangePasswordPage>(sp =>
-			new Pages.ChangePasswordPage(
-				sp.GetRequiredService<IAuthService>(),
-				sp.GetRequiredService<INavigationService>()));
-		builder.Services.AddTransient<Pages.ResetPasswordPage>(sp =>
-			new Pages.ResetPasswordPage(
-				sp.GetRequiredService<IAuthService>(),
-				sp.GetRequiredService<INavigationService>()));
-		builder.Services.AddTransient<MainPage>(sp =>
-			new MainPage(
-				sp.GetRequiredService<IAuthService>(),
-				sp.GetRequiredService<INavigationService>()));
-		builder.Services.AddTransient<Pages.AdminDashboardPage>(sp =>
-			new Pages.AdminDashboardPage(
-				sp.GetRequiredService<IApiClient>(),
-				sp.GetRequiredService<INavigationService>()));
-		builder.Services.AddTransient<Pages.TeamInspectionsPage>(sp =>
-			new Pages.TeamInspectionsPage(
-				sp.GetRequiredService<IApiClient>(),
-				sp.GetRequiredService<INavigationService>()));
+		// Registrar páginas usando DI automático (más eficiente que factory functions explícitas)
+		// DI resolverá automáticamente las dependencias desde los constructores
+		builder.Services.AddTransient<Pages.LoginPage>();
+		builder.Services.AddTransient<Pages.RegisterPage>();
+		builder.Services.AddTransient<Pages.CapturePage>(); // Mantener para compatibilidad
+		builder.Services.AddTransient<Pages.MultiCapturePage>();
+		builder.Services.AddTransient<Pages.InspectionHistoryPage>();
+		builder.Services.AddTransient<Pages.InspectionDetailsPage>();
+		builder.Services.AddTransient<Pages.ResultsPage>();
+		builder.Services.AddTransient<Pages.HistoryPage>(); // Mantener para compatibilidad
+		builder.Services.AddTransient<Pages.ForgotPasswordPage>();
+		builder.Services.AddTransient<Pages.ChangePasswordPage>();
+		builder.Services.AddTransient<Pages.ResetPasswordPage>();
+		builder.Services.AddTransient<MainPage>();
+		builder.Services.AddTransient<Pages.AdminDashboardPage>();
+		builder.Services.AddTransient<Pages.TeamInspectionsPage>();
 
 		var app = builder.Build();
 		

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Runtime.Versioning;
+using System.Threading;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Storage;
@@ -27,14 +28,25 @@ public partial class MultiCapturePage : ContentPage
     private IList<AffiliatedCompanyDto>? _assignedCompanies;
     private AffiliatedCompanyDto? _selectedCompany;
     private bool _isAnalyzing;
+    private readonly SemaphoreSlim _analyzeSemaphore = new SemaphoreSlim(1, 1); // Protección contra ejecución concurrente
 
     public MultiCapturePage(IApiClient apiClient, IAuthService authService, INotificationService notificationService, INavigationService? navigationService = null)
     {
+        var instanceId = Guid.NewGuid();
+        System.Diagnostics.Debug.WriteLine($"🏗️ [MultiCapturePage] Nueva instancia creada - InstanceId: {instanceId}, Thread: {Thread.CurrentThread.ManagedThreadId}, Time: {DateTime.Now:HH:mm:ss.fff}");
+        
         InitializeComponent();
         _apiClient = apiClient;
         _authService = authService;
         _notificationService = notificationService;
         _navigationService = navigationService;
+        
+        // ═══════════════════════════════════════════════════════════════
+        // PROTECCIÓN: Desregistrar y registrar evento para evitar duplicados
+        // ═══════════════════════════════════════════════════════════════
+        AnalyzeButton.Clicked -= OnAnalyzeClicked; // Desregistrar primero (por si acaso)
+        AnalyzeButton.Clicked += OnAnalyzeClicked; // Registrar el evento
+        System.Diagnostics.Debug.WriteLine($"🔗 [MultiCapturePage] Evento OnAnalyzeClicked registrado - InstanceId: {instanceId}");
         
         // Establecer ItemsSource directamente (no usar binding)
         PhotosCollection.ItemsSource = _capturedPhotos;
@@ -402,33 +414,69 @@ public partial class MultiCapturePage : ContentPage
 
     private async void OnAnalyzeClicked(object? sender, EventArgs e)
     {
-        System.Diagnostics.Debug.WriteLine("🔍 OnAnalyzeClicked iniciado");
+        var clickId = Guid.NewGuid();
+        System.Diagnostics.Debug.WriteLine($"🖱️ [OnAnalyzeClicked] CLIC DETECTADO - ClickId: {clickId}, Thread: {Thread.CurrentThread.ManagedThreadId}, Time: {DateTime.Now:HH:mm:ss.fff}");
+        System.Diagnostics.Debug.WriteLine($"🖱️ [OnAnalyzeClicked] Sender: {sender?.GetType().Name}, Button IsEnabled: {(sender as Button)?.IsEnabled}");
         
-        var selectedPhotos = _capturedPhotos.Where(p => p.IsSelected).ToList();
-        System.Diagnostics.Debug.WriteLine($"📸 Fotos seleccionadas: {selectedPhotos.Count} de {_capturedPhotos.Count}");
+        // ═══════════════════════════════════════════════════════════════
+        // PROTECCIÓN CONTRA DOBLE CLIC Y EJECUCIÓN CONCURRENTE
+        // ═══════════════════════════════════════════════════════════════
         
-        if (selectedPhotos.Count == 0)
+        // Intentar adquirir el semáforo (retorna false si ya está en uso)
+        if (!await _analyzeSemaphore.WaitAsync(0))
         {
-            await DisplayAlertAsync("Sin Selección", "Debes seleccionar al menos una foto para analizar.", "OK");
+            System.Diagnostics.Debug.WriteLine($"⚠️ [OnAnalyzeClicked] ClickId: {clickId} - Semáforo bloqueado, ignorando clic duplicado/concurrente");
             return;
         }
-
-        if (_selectedCompany == null)
-        {
-            System.Diagnostics.Debug.WriteLine("❌ No hay empresa seleccionada");
-            await DisplayAlertAsync("Empresa Requerida", "Debes seleccionar una empresa cliente.", "OK");
-            return;
-        }
-
-        System.Diagnostics.Debug.WriteLine($"✅ Empresa seleccionada: {_selectedCompany.Name} (ID: {_selectedCompany.Id})");
-
-        InspectionDto? inspection = null;
+        
+        System.Diagnostics.Debug.WriteLine($"🔒 [OnAnalyzeClicked] ClickId: {clickId} - Semáforo adquirido exitosamente");
         
         try
         {
+            // Verificación adicional con flag
+            if (_isAnalyzing)
+            {
+                System.Diagnostics.Debug.WriteLine($"⚠️ [OnAnalyzeClicked] ClickId: {clickId} - Flag _isAnalyzing ya está en true, ignorando");
+                return;
+            }
+            
+            // Deshabilitar botón INMEDIATAMENTE (antes de cualquier operación asíncrona)
+            AnalyzeButton.IsEnabled = false;
+            System.Diagnostics.Debug.WriteLine($"🔒 [OnAnalyzeClicked] ClickId: {clickId} - Botón deshabilitado");
+            
+            // Establecer flag ANTES de cualquier operación asíncrona
             _isAnalyzing = true;
-            SetLoading(true);
-            UpdateButtonsState(); // Deshabilitar botones inmediatamente
+            
+            System.Diagnostics.Debug.WriteLine($"🔍 [OnAnalyzeClicked] ClickId: {clickId} - Iniciado - Thread: {Thread.CurrentThread.ManagedThreadId}, Time: {DateTime.Now:HH:mm:ss.fff}");
+            
+            var selectedPhotos = _capturedPhotos.Where(p => p.IsSelected).ToList();
+            System.Diagnostics.Debug.WriteLine($"📸 Fotos seleccionadas: {selectedPhotos.Count} de {_capturedPhotos.Count}");
+            
+            if (selectedPhotos.Count == 0)
+            {
+                _isAnalyzing = false;
+                UpdateButtonsState();
+                await DisplayAlertAsync("Sin Selección", "Debes seleccionar al menos una foto para analizar.", "OK");
+                return;
+            }
+
+            if (_selectedCompany == null)
+            {
+                System.Diagnostics.Debug.WriteLine("❌ No hay empresa seleccionada");
+                _isAnalyzing = false;
+                UpdateButtonsState();
+                await DisplayAlertAsync("Empresa Requerida", "Debes seleccionar una empresa cliente.", "OK");
+                return;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"✅ Empresa seleccionada: {_selectedCompany.Name} (ID: {_selectedCompany.Id})");
+
+            InspectionDto? inspection = null;
+            
+            try
+            {
+                SetLoading(true);
+                UpdateButtonsState(); // Deshabilitar botones inmediatamente
             
             StatusLabel.Text = "Creando inspección...";
             StatusSubLabel.Text = "Por favor espera...";
@@ -443,7 +491,10 @@ public partial class MultiCapturePage : ContentPage
                 null
             )).ToList();
 
-            System.Diagnostics.Debug.WriteLine($"📤 Enviando {photoDtos.Count} fotos para crear inspección...");
+            System.Diagnostics.Debug.WriteLine($"📤 [OnAnalyzeClicked] Enviando {photoDtos.Count} fotos para crear inspección...");
+            System.Diagnostics.Debug.WriteLine($"📤 [OnAnalyzeClicked] Request ID único: {Guid.NewGuid()}");
+            System.Diagnostics.Debug.WriteLine($"📤 [OnAnalyzeClicked] Empresa ID: {_selectedCompany.Id}");
+            System.Diagnostics.Debug.WriteLine($"📤 [OnAnalyzeClicked] Timestamp: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}");
 
             // Crear inspección
             var createRequest = new CreateInspectionDto(
@@ -451,7 +502,9 @@ public partial class MultiCapturePage : ContentPage
                 photoDtos
             );
 
+            System.Diagnostics.Debug.WriteLine($"📤 [OnAnalyzeClicked] Llamando a CreateInspectionAsync - Thread: {Thread.CurrentThread.ManagedThreadId}");
             inspection = await _apiClient.CreateInspectionAsync(createRequest);
+            System.Diagnostics.Debug.WriteLine($"✅ [OnAnalyzeClicked] CreateInspectionAsync completado - Inspection ID: {inspection?.Id}");
 
             if (inspection != null)
             {
@@ -511,42 +564,50 @@ public partial class MultiCapturePage : ContentPage
                 System.Diagnostics.Debug.WriteLine("❌ La inspección no se creó correctamente");
                 throw new Exception("No se pudo crear la inspección.");
             }
-        }
-        catch (ApiException ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"❌ ApiException al analizar: {ex.Message} (Status: {ex.StatusCode})");
-            StatusLabel.Text = "❌ Error al Iniciar Análisis";
-            StatusSubLabel.Text = ex.Message;
-            StatusSubLabel.IsVisible = true;
-            StatusBorder.IsVisible = true;
-            StatusBorder.Stroke = (Color)Application.Current!.Resources["Error"]!;
-            StatusBorder.BackgroundColor = Color.FromArgb("#FFEBEE"); // Light red
-            _isAnalyzing = false; // Resetear solo en caso de error
-            UpdateButtonsState();
-            await DisplayAlertAsync("Error", $"Error al iniciar el análisis: {ex.Message}", "OK");
+            }
+            catch (ApiException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ ApiException al analizar: {ex.Message} (Status: {ex.StatusCode})");
+                StatusLabel.Text = "❌ Error al Iniciar Análisis";
+                StatusSubLabel.Text = ex.Message;
+                StatusSubLabel.IsVisible = true;
+                StatusBorder.IsVisible = true;
+                StatusBorder.Stroke = (Color)Application.Current!.Resources["Error"]!;
+                StatusBorder.BackgroundColor = Color.FromArgb("#FFEBEE"); // Light red
+                _isAnalyzing = false; // Resetear solo en caso de error
+                UpdateButtonsState();
+                await DisplayAlertAsync("Error", $"Error al iniciar el análisis: {ex.Message}", "OK");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Error al analizar: {ex}");
+                System.Diagnostics.Debug.WriteLine($"   StackTrace: {ex.StackTrace}");
+                StatusLabel.Text = "❌ Error Inesperado";
+                StatusSubLabel.Text = "Ocurrió un error al iniciar el análisis. Por favor, intenta nuevamente.";
+                StatusSubLabel.IsVisible = true;
+                StatusBorder.IsVisible = true;
+                StatusBorder.Stroke = (Color)Application.Current!.Resources["Error"]!;
+                StatusBorder.BackgroundColor = Color.FromArgb("#FFEBEE"); // Light red
+                _isAnalyzing = false; // Resetear solo en caso de error
+                UpdateButtonsState();
+                await DisplayAlertAsync("Error", $"Error inesperado: {ex.Message}", "OK");
+            }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"❌ Error al analizar: {ex}");
-            System.Diagnostics.Debug.WriteLine($"   StackTrace: {ex.StackTrace}");
-            StatusLabel.Text = "❌ Error Inesperado";
-            StatusSubLabel.Text = "Ocurrió un error al iniciar el análisis. Por favor, intenta nuevamente.";
-            StatusSubLabel.IsVisible = true;
-            StatusBorder.IsVisible = true;
-            StatusBorder.Stroke = (Color)Application.Current!.Resources["Error"]!;
-            StatusBorder.BackgroundColor = Color.FromArgb("#FFEBEE"); // Light red
-            _isAnalyzing = false; // Resetear solo en caso de error
+            System.Diagnostics.Debug.WriteLine($"❌ Error en protección OnAnalyzeClicked: {ex}");
+            _isAnalyzing = false;
             UpdateButtonsState();
-            await DisplayAlertAsync("Error", $"Error inesperado: {ex.Message}", "OK");
         }
         finally
         {
             // Solo resetear loading, pero mantener _isAnalyzing si el análisis se inició correctamente
-            if (inspection == null)
-            {
-                _isAnalyzing = false;
-            }
+            // Nota: inspection no está disponible aquí porque está dentro del try interno
             SetLoading(false);
+            
+            // Liberar el semáforo
+            _analyzeSemaphore.Release();
+            System.Diagnostics.Debug.WriteLine($"🔓 Semáforo liberado - Thread: {Thread.CurrentThread.ManagedThreadId}");
         }
     }
 

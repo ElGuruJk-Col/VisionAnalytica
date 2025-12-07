@@ -9,6 +9,7 @@ using System.Linq;
 using System.Security.Claims;
 using Microsoft.Extensions.Configuration;
 using VisioAnalytica.Core.Models;
+using VisioAnalytica.Infrastructure.Data;
 using VisioAnalytica.Infrastructure.Services;
 using Xunit;
 
@@ -21,11 +22,13 @@ namespace VisioAnalytica.Core.Tests;
 public class TokenServiceTests
 {
     private readonly Mock<IConfiguration> _mockConfig;
+    private readonly Mock<VisioAnalyticaDbContext> _mockDbContext;
     private readonly TokenService _sut; // System Under Test
 
     public TokenServiceTests()
     {
         _mockConfig = new Mock<IConfiguration>();
+        _mockDbContext = new Mock<VisioAnalyticaDbContext>();
 
         // Configurar los "Secretos" del token usando collection expressions
         // La clave debe ser larga para cumplir con el requisito de seguridad SHA512.
@@ -35,9 +38,11 @@ public class TokenServiceTests
             .Returns("test-issuer");
         _mockConfig.SetupGet(x => x[It.Is<string>(s => s == "Jwt:Audience")])
             .Returns("test-audience");
+        _mockConfig.SetupGet(x => x[It.Is<string>(s => s == "Jwt:AccessTokenExpirationMinutes")])
+            .Returns("120");
 
-        // Crear la instancia real del servicio con el Mock (SUT)
-        _sut = new TokenService(_mockConfig.Object);
+        // Crear la instancia real del servicio con los Mocks (SUT)
+        _sut = new TokenService(_mockConfig.Object, _mockDbContext.Object);
     }
 
     [Fact]
@@ -150,14 +155,14 @@ public class TokenServiceTests
 
         // Act & Assert
         var exception = Assert.Throws<ArgumentNullException>(() => 
-            new TokenService(_mockConfig.Object));
+            new TokenService(_mockConfig.Object, _mockDbContext.Object));
         
         exception.ParamName.Should().Be("config");
         exception.Message.Should().Contain("Jwt:Key");
     }
 
     [Fact]
-    public void CreateToken_ShouldSetExpiration_To7Days()
+    public void CreateToken_ShouldSetExpiration_ToConfiguredMinutes()
     {
         // Arrange
         var user = new User
@@ -175,6 +180,7 @@ public class TokenServiceTests
 
         // Assert
         jsonToken.Should().NotBeNull();
-        jsonToken!.ValidTo.Should().BeCloseTo(DateTime.UtcNow.AddDays(7), TimeSpan.FromMinutes(5));
+        // Verificar que expira en 120 minutos (configurado en el mock)
+        jsonToken!.ValidTo.Should().BeCloseTo(DateTime.UtcNow.AddMinutes(120), TimeSpan.FromMinutes(5));
     }
 }

@@ -24,6 +24,9 @@ namespace VisioAnalytica.Infrastructure.Data
         // --- EMPRESAS AFILIADAS (Sistema de Roles) ---
         public DbSet<AffiliatedCompany> AffiliatedCompanies { get; set; }
 
+        // --- REFRESH TOKENS (Sistema de Renovación de Tokens) ---
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder); // CRÍTICO: Aplica las reglas de Identity
@@ -149,6 +152,27 @@ namespace VisioAnalytica.Infrastructure.Data
                         j.HasKey("UserId", "AffiliatedCompanyId");
                         j.ToTable("InspectorAffiliatedCompanies");
                     });
+
+            // 7. Reglas para la entidad RefreshToken
+            builder.Entity<RefreshToken>(entity =>
+            {
+                // Relación N:1 con User
+                entity.HasOne(rt => rt.User)
+                      .WithMany()
+                      .HasForeignKey(rt => rt.UserId)
+                      .OnDelete(DeleteBehavior.Cascade); // Si se borra el usuario, se borran sus refresh tokens
+
+                // Índice único en el token para búsquedas rápidas
+                entity.HasIndex(rt => rt.Token).IsUnique();
+
+                // Ignorar propiedades calculadas (no se mapean a la BD)
+                entity.Ignore(rt => rt.IsRevoked);
+                entity.Ignore(rt => rt.IsExpired);
+                entity.Ignore(rt => rt.IsActive);
+
+                // Índice compuesto para búsquedas por usuario y expiración
+                entity.HasIndex(rt => new { rt.UserId, rt.ExpiresAt });
+            });
         }
     }
 }

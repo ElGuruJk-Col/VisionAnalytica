@@ -136,13 +136,14 @@ namespace VisioAnalytica.Api.Controllers
                 }
 
                 // Si no se proporciona, verificar que la imagen pertenezca a una inspección del inspector
-                // Buscar la inspección que contiene esta imagen
-                var inspection = await _context.Inspections
-                    .FirstOrDefaultAsync(i => i.ImageUrl.Contains(fileName) && 
-                                            i.OrganizationId == organizationId &&
-                                            i.UserId == currentUserId.Value);
+                // ⚠️ CORRECCIÓN: Buscar en la tabla Photo, no en Inspection.ImageUrl
+                var photo = await _context.Photos
+                    .Include(p => p.Inspection)
+                    .FirstOrDefaultAsync(p => p.ImageUrl.Contains(fileName) && 
+                                             p.Inspection.OrganizationId == organizationId &&
+                                             p.Inspection.UserId == currentUserId.Value);
 
-                return inspection != null;
+                return photo != null;
             }
 
             // Cliente: solo puede acceder a imágenes de su empresa
@@ -153,16 +154,17 @@ namespace VisioAnalytica.Api.Controllers
                     return false;
                 }
 
-                // Buscar la inspección y verificar que pertenezca a la empresa del cliente
-                // (Asumiendo que el cliente tiene una empresa asignada - esto puede necesitar ajuste según el modelo)
-                var inspection = await _context.Inspections
-                    .Include(i => i.AffiliatedCompany)
-                    .FirstOrDefaultAsync(i => i.ImageUrl.Contains(fileName) && 
-                                            i.OrganizationId == organizationId);
+                // Buscar la foto y verificar que pertenezca a una inspección de la organización
+                // ⚠️ CORRECCIÓN: Buscar en la tabla Photo, no en Inspection.ImageUrl
+                var photo = await _context.Photos
+                    .Include(p => p.Inspection)
+                    .ThenInclude(i => i.AffiliatedCompany)
+                    .FirstOrDefaultAsync(p => p.ImageUrl.Contains(fileName) && 
+                                             p.Inspection.OrganizationId == organizationId);
 
-                // Por ahora, si la inspección existe en la organización, el cliente puede verla
+                // Por ahora, si la foto existe en la organización, el cliente puede verla
                 // Esto puede necesitar ajuste según la lógica de negocio específica
-                return inspection != null;
+                return photo != null;
             }
 
             return false;

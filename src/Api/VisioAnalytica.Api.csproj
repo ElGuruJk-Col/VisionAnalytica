@@ -5,6 +5,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>6058621b-f2d5-419a-80aa-c974a87721c2</UserSecretsId>
+    
+    <!-- Optimizaciones específicas para API -->
+    <!-- Swashbuckle puede ser lento, optimizar en Debug -->
+    <GenerateDocumentationFile Condition="'$(Configuration)' == 'Debug'">false</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
