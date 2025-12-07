@@ -42,7 +42,7 @@ namespace VisioAnalytica.Infrastructure.Services
         // --- LÓGICA DE NEGOCIO Y PERSISTENCIA COMBINADA ---
 
         // La firma del método ya recibe todos los GUIDs necesarios.
-        public async Task<SstAnalysisResult?> PerformSstAnalysisAsync(AnalysisRequestDto request, string userId, Guid organizationId)
+        public async Task<SstAnalysisResult?> PerformSstAnalysisAsync(AnalysisRequestDto request, string userId, Guid organizationId, bool skipPersistence = false)
         {
             _logger.LogInformation("Iniciando PerformSstAnalysisAsync para el usuario {UserId} y Org {OrganizationId}.", userId, organizationId);
             string promptParaUsar;
@@ -114,46 +114,61 @@ namespace VisioAnalytica.Infrastructure.Services
                 throw;
             }
 
-            // 4. Persistir el resultado en la BBDD
-
-            // 4.A: Construir la Inspección (cabecera)
-            if (!Guid.TryParse(userId, out var parsedUserId))
+            // 4. Persistir el resultado en la BBDD (solo si no se omite la persistencia)
+            if (!skipPersistence)
             {
-                // Esto solo se lanza si el validador del controlador falla
-                _logger.LogError("Error de formato: El userId '{UserId}' no es un GUID válido.", userId);
-                throw new InvalidOperationException("El identificador de usuario no tiene un formato válido (GUID). Fallo en la autenticación.");
-            }
-
-            var inspection = new Inspection
-            {
-                // Usamos los GUIDs validados y pasados por argumento.
-                UserId = parsedUserId,
-                OrganizationId = organizationId,
-                ImageUrl = imageUrl, // URL real de la imagen guardada
-            };
-
-            // 4.B: Mapear los Hallazgos (SstAnalysisResult) a las Entidades (Finding)
-            foreach (var hallazgo in result.Hallazgos)
-            {
-                inspection.Findings.Add(new Finding
+                // 4.A: Construir la Inspección (cabecera)
+                if (!Guid.TryParse(userId, out var parsedUserId))
                 {
-                    Description = hallazgo.Descripcion,
-                    RiskLevel = hallazgo.NivelRiesgo,
-                    CorrectiveAction = hallazgo.AccionCorrectiva,
-                    PreventiveAction = hallazgo.AccionPreventiva,
-                });
-            }
+                    // Esto solo se lanza si el validador del controlador falla
+                    _logger.LogError("Error de formato: El userId '{UserId}' no es un GUID válido.", userId);
+                    throw new InvalidOperationException("El identificador de usuario no tiene un formato válido (GUID). Fallo en la autenticación.");
+                }
 
-            try
-            {
-                // 4.C: Guardar en el Repositorio
-                await _analysisRepository.SaveInspectionAsync(inspection);
-                _logger.LogInformation("Inspección {InspectionId} persistida en la BBDD para el usuario {UserId}.", inspection.Id, userId);
+                // Obtener la primera empresa afiliada activa para esta organización
+                var affiliatedCompanyId = await _analysisRepository.GetFirstActiveAffiliatedCompanyIdAsync(organizationId);
+                if (!affiliatedCompanyId.HasValue)
+                {
+                    _logger.LogError("No se encontró ninguna empresa afiliada activa para la organización {OrganizationId}.", organizationId);
+                    throw new InvalidOperationException($"No se encontró ninguna empresa afiliada activa para la organización {organizationId}.");
+                }
+
+                var inspection = new Inspection
+                {
+                    // Usamos los GUIDs validados y pasados por argumento.
+                    UserId = parsedUserId,
+                    OrganizationId = organizationId,
+                    ImageUrl = imageUrl, // URL real de la imagen guardada
+                    AffiliatedCompanyId = affiliatedCompanyId.Value,
+                };
+
+                // 4.B: Mapear los Hallazgos (SstAnalysisResult) a las Entidades (Finding)
+                foreach (var hallazgo in result.Hallazgos)
+                {
+                    inspection.Findings.Add(new Finding
+                    {
+                        Description = hallazgo.Descripcion,
+                        RiskLevel = hallazgo.NivelRiesgo,
+                        CorrectiveAction = hallazgo.AccionCorrectiva,
+                        PreventiveAction = hallazgo.AccionPreventiva,
+                    });
+                }
+
+                try
+                {
+                    // 4.C: Guardar en el Repositorio
+                    await _analysisRepository.SaveInspectionAsync(inspection);
+                    _logger.LogInformation("Inspección {InspectionId} persistida en la BBDD para el usuario {UserId}.", inspection.Id, userId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "ERROR CRÍTICO al guardar la Inspección en el repositorio para el usuario {UserId}. El resultado de la IA se perdió.", userId);
+                    throw;
+                }
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogError(ex, "ERROR CRÍTICO al guardar la Inspección en el repositorio para el usuario {UserId}. El resultado de la IA se perdió.", userId);
-                throw;
+                _logger.LogInformation("Modo de prueba activado: La inspección NO se persistirá en la BBDD para el usuario {UserId}.", userId);
             }
 
             // 5. Devolver el resultado de la IA al Controller API.

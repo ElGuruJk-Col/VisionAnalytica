@@ -35,5 +35,12 @@ namespace VisioAnalytica.Core.Interfaces
         /// <param name="organizationId">ID de la organización.</param>
         /// <returns>Lista de Inspecciones, o lista vacía.</returns>
         Task<IReadOnlyList<Inspection>> GetInspectionsByOrganizationAsync(Guid organizationId);
+
+        /// <summary>
+        /// Obtiene el ID de la primera empresa afiliada activa para una organización.
+        /// </summary>
+        /// <param name="organizationId">ID de la organización.</param>
+        /// <returns>ID de la empresa afiliada o null si no existe ninguna activa.</returns>
+        Task<Guid?> GetFirstActiveAffiliatedCompanyIdAsync(Guid organizationId);
     }
 }

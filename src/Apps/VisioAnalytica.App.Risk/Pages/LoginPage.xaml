@@ -32,11 +32,25 @@
 
             <!-- Password Entry -->
             <Label Text="Contraseña" FontSize="14" FontAttributes="Bold" Margin="0,10,0,0" />
-            <Entry 
-                x:Name="PasswordEntry"
-                Placeholder="Ingresa tu contraseña"
-                IsPassword="True"
-                Text="{Binding Password}" />
+            <Grid>
+                <Entry 
+                    x:Name="PasswordEntry"
+                    Placeholder="Ingresa tu contraseña"
+                    IsPassword="True"
+                    Text="{Binding Password}" />
+                <Button x:Name="TogglePasswordButton"
+                        Clicked="OnTogglePasswordClicked"
+                        BackgroundColor="Transparent"
+                        TextColor="{StaticResource Gray600}"
+                        FontSize="18"
+                        HorizontalOptions="End"
+                        WidthRequest="40"
+                        HeightRequest="40"
+                        Margin="0,0,8,0"
+                        Padding="0"
+                        Opacity="0.7"
+                        Text="●" />
+            </Grid>
 
             <!-- Error Message -->
             <Label 
@@ -64,14 +78,25 @@
                 Margin="0,20,0,0"
                 HeightRequest="50" />
 
-            <!-- Register Button -->
+            <!-- Forgot Password Link -->
+            <Button 
+                x:Name="ForgotPasswordButton"
+                Text="¿Olvidaste tu contraseña?"
+                Clicked="OnForgotPasswordClicked"
+                BackgroundColor="Transparent"
+                TextColor="#512BD4"
+                FontSize="14"
+                Margin="0,10,0,0" />
+
+            <!-- Register Button (Oculto - Solo para uso futuro desde web app) -->
             <Button 
                 x:Name="RegisterButton"
                 Text="¿No tienes cuenta? Regístrate"
                 Clicked="OnRegisterClicked"
                 BackgroundColor="Transparent"
                 TextColor="#512BD4"
-                Margin="0,10,0,0" />
+                Margin="0,10,0,0"
+                IsVisible="False" />
 
         </VerticalStackLayout>
     </ScrollView>

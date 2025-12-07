@@ -73,5 +73,6 @@ _ReSharper.*/
 TestResults/
 
 # Directorios de imagenes subidas al servidor
-src/Api/uploads/
-src/Api/uploads/
+Storage/Images/
+src/Storage/Images/
+**/Storage/Images/

@@ -58,5 +58,10 @@ namespace VisioAnalytica.Core.Models
 
         // Propiedad de Navegación: Una Inspección tiene MUCHOS Hallazgos
         public virtual ICollection<Finding> Findings { get; set; } = new HashSet<Finding>();
+
+        /// <summary>
+        /// Fotos capturadas en esta inspección.
+        /// </summary>
+        public virtual ICollection<Photo> Photos { get; set; } = new HashSet<Photo>();
     }
 }

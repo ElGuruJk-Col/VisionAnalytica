@@ -1,9 +1,11 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Hangfire;
+using Hangfire.SqlServer;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi;
+using Microsoft.OpenApi.Models;
 using System.Text;
 using VisioAnalytica.Core.Interfaces;
 using VisioAnalytica.Core.Models;
@@ -35,12 +37,12 @@ namespace VisioAnalytica.Api.Extensions
             // --- 2. CONFIGURACIÓN DE IDENTITY ---
             services.AddIdentityCore<User>(options =>
             {
-                // Mantenemos tus reglas de contraseña relajadas para el desarrollo
-                options.Password.RequireDigit = false;
-                options.Password.RequireLowercase = false;
-                options.Password.RequireNonAlphanumeric = false;
-                options.Password.RequireUppercase = false;
-                options.Password.RequiredLength = 4;
+                // Reglas de contraseña seguras
+                options.Password.RequireDigit = true;
+                options.Password.RequireLowercase = true;
+                options.Password.RequireNonAlphanumeric = true;
+                options.Password.RequireUppercase = true;
+                options.Password.RequiredLength = 8;
             })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<VisioAnalyticaDbContext>()
@@ -60,6 +62,47 @@ namespace VisioAnalytica.Api.Extensions
                         ValidAudience = config["Jwt:Audience"],
                         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]!))
                     };
+
+                    // AGREGAR ESTE EVENT HANDLER PARA LOGGING
+                    options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+                    {
+                        OnAuthenticationFailed = context =>
+                        {
+                            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                            logger.LogError(context.Exception, "Error de autenticación JWT: {Error}", context.Exception.Message);
+                            return Task.CompletedTask;
+                        },
+                        OnTokenValidated = context =>
+                        {
+                            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                            logger.LogInformation("Token JWT validado exitosamente. Claims: {Claims}",
+                                string.Join(", ", context.Principal!.Claims.Select(c => $"{c.Type}={c.Value}")));
+                            return Task.CompletedTask;
+                        },
+                        OnChallenge = context =>
+                        {
+                            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+
+                            // Logging MUY detallado
+                            var authHeader = context.HttpContext.Request.Headers["Authorization"].ToString();
+                            var allHeaders = string.Join(", ", context.HttpContext.Request.Headers.Select(h => $"{h.Key}={h.Value}"));
+
+                            logger.LogWarning("═══════════════════════════════════════════════════");
+                            logger.LogWarning("🔒 CHALLENGE DE AUTENTICACIÓN DETECTADO");
+                            logger.LogWarning("═══════════════════════════════════════════════════");
+                            logger.LogWarning("Path: {Path}", context.HttpContext.Request.Path);
+                            logger.LogWarning("Method: {Method}", context.HttpContext.Request.Method);
+                            logger.LogWarning("Authorization Header: '{AuthHeader}'", authHeader ?? "NULL o VACÍO");
+                            logger.LogWarning("Authorization Header Length: {Length}", authHeader?.Length ?? 0);
+                            logger.LogWarning("Error: {Error}", context.Error ?? "NULL");
+                            logger.LogWarning("ErrorDescription: {Description}", context.ErrorDescription ?? "NULL");
+                            logger.LogWarning("IsAuthenticated: {IsAuth}", context.HttpContext.User?.Identity?.IsAuthenticated ?? false);
+                            logger.LogWarning("Todos los headers: {Headers}", allHeaders);
+                            logger.LogWarning("═══════════════════════════════════════════════════");
+
+                            return Task.CompletedTask;
+                        }
+                    };
                 });
 
             services.AddAuthorization();
@@ -68,6 +111,8 @@ namespace VisioAnalytica.Api.Extensions
             // Aquí consolidamos todo.
 
             // 4.A: Nuestro Servicio de Tokens (de la Tarea 30)
+            // TokenService requiere IConfiguration y VisioAnalyticaDbContext
+            // El contenedor de DI los resolverá automáticamente
             services.AddScoped<ITokenService, TokenService>();
 
             // 4.B: Nuestro Servicio de IA (¡El tuyo, v4.0!)
@@ -77,22 +122,55 @@ namespace VisioAnalytica.Api.Extensions
             // 4.C: Nuestro Servicio de Auth (de la Tarea 30)
             services.AddScoped<IAuthService, AuthService>();
 
+            // 4.C.1: Repositorio de Análisis (requerido por AnalysisService)
+            services.AddScoped<IAnalysisRepository, AnalysisRepository>();
+
+            // 4.C.2: Almacenamiento de Archivos (requerido por InspectionService y AnalysisService)
+            services.AddScoped<IFileStorage, LocalFileStorage>();
+
+            // 4.C.3: Generador de Reportes PDF (requerido por AnalysisOrchestrator)
+            services.AddScoped<IPdfReportGenerator, PdfReportGenerator>();
+
+            // 4.C.4: Servicio de Reportes (requerido por AnalysisController)
+            services.AddScoped<IReportService, ReportService>();
+
+            // 4.C.5: Servicio de Inicialización de Roles (requerido al iniciar la aplicación)
+            services.AddScoped<RoleSeederService>();
+
+            // 4.C.6: Servicio de Empresas Afiliadas (requerido por AffiliatedCompanyController)
+            services.AddScoped<IAffiliatedCompanyService, AffiliatedCompanyService>();
+
+            // 4.C.7: Servicio de Gestión de Usuarios (requerido por UserManagementController)
+            services.AddScoped<IUserManagementService, UserManagementService>();
+
             // 4.D: El "cerebro" orquestador de Análisis de Escritura
             services.AddScoped<IAnalysisService, AnalysisService>();
 
-            // 4.E: El Repositorio de Persistencia (de lectura/escritura)
-            services.AddScoped<IAnalysisRepository, AnalysisRepository>();
+            // 4.J: ¡NUEVO REGISTRO! Servicio de Inspecciones
+            services.AddScoped<IInspectionService, InspectionService>();
+            
+            // 4.K: ¡NUEVO REGISTRO! Orquestador de Análisis
+            services.AddScoped<IAnalysisOrchestrator, AnalysisOrchestrator>();
 
-            // 4.F: ¡NUEVO REGISTRO! El Servicio de Consultas y Reportes (Capítulo 4)
-            services.AddScoped<IReportService, ReportService>(); // << ¡AÑADIDO!
+            // 4.L: ¡NUEVO REGISTRO! Servicio de limpieza de refresh tokens en segundo plano
+            services.AddHostedService<RefreshTokenCleanupService>();
 
-            // 4.G: ¡NUEVO REGISTRO! El Servicio de Almacenamiento de Archivos (Capítulo 5)
-            services.AddScoped<IFileStorage, LocalFileStorage>(); // << ¡AÑADIDO!
+            // 4.K: Configuración de Hangfire para análisis en segundo plano
+            var connectionString = config.GetConnectionString("LocalSqlServerConnection");
+            services.AddHangfire(configuration => configuration
+                .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+                .UseSimpleAssemblyNameTypeSerializer()
+                .UseRecommendedSerializerSettings()
+                .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
+                {
+                    CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+                    SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+                    QueuePollInterval = TimeSpan.Zero,
+                    UseRecommendedIsolationLevel = true,
+                    DisableGlobalLocks = true
+                }));
 
-            // 4.H: ¡NUEVO REGISTRO! Servicios de Gestión de Usuarios y Empresas Afiliadas
-            services.AddScoped<IUserManagementService, UserManagementService>();
-            services.AddScoped<IAffiliatedCompanyService, AffiliatedCompanyService>();
-            services.AddScoped<RoleSeederService>();
+            services.AddHangfireServer();
 
             // 4.I: ¡NUEVO REGISTRO! Servicio de Email (Configurable: SMTP o SendGrid)
             var emailProvider = config["Email:Provider"] ?? "Smtp";
@@ -134,24 +212,29 @@ namespace VisioAnalytica.Api.Extensions
             {
                 options.SwaggerDoc("v1", new OpenApiInfo { Title = "VisioAnalytica API", Version = "v1" });
 
+                // Configuración de seguridad Bearer JWT
                 options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
                 {
-                    In = ParameterLocation.Header,
-                    Description = "Por favor ingrese el token JWT con 'Bearer ' en el campo",
-                    Name = "Authorization",
-                    Type = SecuritySchemeType.ApiKey,
-                    Scheme = "Bearer"
+                    Type = SecuritySchemeType.Http,
+                    Scheme = "Bearer",
+                    BearerFormat = "JWT",
+                    Description = "Ingrese el token JWT (sin la palabra 'Bearer'). Ejemplo: eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9..."
                 });
-                options.AddSecurityRequirement(c =>
+
+                // Aplicar seguridad Bearer a todos los endpoints
+                options.AddSecurityRequirement(new OpenApiSecurityRequirement
                 {
-                    var requirement = new OpenApiSecurityRequirement
                     {
+                        new OpenApiSecurityScheme
                         {
-                            new OpenApiSecuritySchemeReference("Bearer"),
-                            new List<string>()
-                        }
-                    };
-                    return requirement;
+                            Reference = new OpenApiReference
+                            {
+                                Type = ReferenceType.SecurityScheme,
+                                Id = "Bearer"
+                            }
+                        },
+                        Array.Empty<string>()
+                    }
                 });
             });
 

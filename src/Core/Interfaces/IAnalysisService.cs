@@ -17,10 +17,12 @@ namespace VisioAnalytica.Core.Interfaces
         /// <param name="request">El DTO de solicitud.</param>
         /// <param name="userId">El ID del usuario autenticado.</param>
         /// <param name="organizationId">El ID de la organización autenticada (para Multi-Tenant).</param>
+        /// <param name="skipPersistence">Si es true, no persiste la inspección en la base de datos (útil para pruebas).</param>
         /// <returns>El resultado del análisis estructurado (SstAnalysisResult).</returns>
         Task<SstAnalysisResult?> PerformSstAnalysisAsync(
             AnalysisRequestDto request,
             string userId,
-            Guid organizationId);
+            Guid organizationId,
+            bool skipPersistence = false);
     }
 }

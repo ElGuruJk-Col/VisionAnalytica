@@ -292,7 +292,7 @@ namespace VisioAnalytica.Infrastructure.Services
                 Phone = company.Phone,
                 Email = company.Email,
                 OrganizationId = company.OrganizationId,
-                OrganizationName = company.Organization.Name,
+                OrganizationName = company.Organization?.Name ?? string.Empty,
                 IsActive = company.IsActive,
                 CreatedAt = company.CreatedAt,
                 AssignedInspectorsCount = company.AssignedInspectors?.Count ?? 0,

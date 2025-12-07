@@ -16,6 +16,13 @@ namespace VisioAnalytica.Core.Interfaces
         Task<string> SaveImageAsync(byte[] imageBytes, string? fileName = null, Guid? organizationId = null);
         
         /// <summary>
+        /// Lee una imagen del almacenamiento y devuelve sus bytes.
+        /// </summary>
+        /// <param name="imageUrl">La URL o ruta de la imagen a leer</param>
+        /// <returns>Los bytes de la imagen, o null si no se pudo leer</returns>
+        Task<byte[]?> ReadImageAsync(string imageUrl);
+        
+        /// <summary>
         /// Elimina una imagen del almacenamiento.
         /// </summary>
         /// <param name="imageUrl">La URL o ruta de la imagen a eliminar</param>
