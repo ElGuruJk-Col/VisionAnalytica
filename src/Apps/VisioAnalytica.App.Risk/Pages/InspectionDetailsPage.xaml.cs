@@ -320,8 +320,54 @@ public partial class InspectionDetailsPage : ContentPage
     }
 
     /// <summary>
+    /// Construye la URL del thumbnail basándose en la URL de la imagen original.
+    /// </summary>
+    private static string? GetThumbnailUrl(string originalImageUrl)
+    {
+        try
+        {
+            // Extraer nombre del archivo de la URL original
+            // Formato esperado: /api/v1/file/images/{orgId}/{filename}?affiliatedCompanyId={id}
+            if (!originalImageUrl.Contains("/api/v1/file/images/", StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            var parts = originalImageUrl.Split('?');
+            var baseUrl = parts[0]; // /api/v1/file/images/{orgId}/{filename}
+            var queryString = parts.Length > 1 ? parts[1] : "";
+
+            // Extraer orgId y filename
+            var imageParts = baseUrl.Replace("/api/v1/file/images/", "").Split('/');
+            if (imageParts.Length < 2)
+            {
+                return null;
+            }
+
+            var orgId = imageParts[0];
+            var fileName = imageParts[1];
+
+            // Construir nombre del thumbnail: thumb_{filename}
+            var thumbnailFileName = $"thumb_{fileName}";
+
+            // Construir URL del thumbnail
+            var thumbnailUrl = $"/api/v1/file/images/{orgId}/thumbnails/{thumbnailFileName}";
+            if (!string.IsNullOrEmpty(queryString))
+            {
+                thumbnailUrl += $"?{queryString}";
+            }
+
+            return thumbnailUrl;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Carga una imagen de forma segura usando el endpoint protegido del FileController.
-    /// Soporta parámetros de optimización del servidor (width, quality).
+    /// Primero intenta cargar el thumbnail para carga rápida, luego la imagen completa si es necesario.
     /// </summary>
     private async Task<ImageSource?> LoadImageSecurelyAsync(string imageUrl)
     {
@@ -334,14 +380,79 @@ public partial class InspectionDetailsPage : ContentPage
                 return null;
             }
 
-            // OPTIMIZACIÓN: Agregar parámetros de compresión/redimensionamiento si el servidor los soporta
-            // Formato: ?width=800&quality=80 (si el servidor implementa estos parámetros)
-            var optimizedUrl = AddImageOptimizationParams(imageUrl);
-
             _imageHttpClient.DefaultRequestHeaders.Authorization = 
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _authService.CurrentToken);
+
+            // OPTIMIZACIÓN: Intentar cargar thumbnail primero para carga rápida
+            var thumbnailUrl = GetThumbnailUrl(imageUrl);
+            if (thumbnailUrl != null)
+            {
+                try
+                {
+                    // Construir URL completa del thumbnail
+                    var baseUrl = imageUrl.Contains("http") 
+                        ? new Uri(imageUrl).GetLeftPart(UriPartial.Authority)
+                        : "";
+                    var fullThumbnailUrl = thumbnailUrl.StartsWith("http") 
+                        ? thumbnailUrl 
+                        : $"{baseUrl}{thumbnailUrl}";
+
+                    var thumbnailResponse = await _imageHttpClient.GetAsync(fullThumbnailUrl);
+                    if (thumbnailResponse.IsSuccessStatusCode)
+                    {
+                        var thumbnailBytes = await thumbnailResponse.Content.ReadAsByteArrayAsync();
+                        var thumbnailSource = ImageSource.FromStream(() => new MemoryStream(thumbnailBytes));
+                        
+                        System.Diagnostics.Debug.WriteLine($"✅ Thumbnail cargado exitosamente: {fullThumbnailUrl}");
+                        
+                        // Cargar imagen completa en background para reemplazar cuando esté lista
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                var fullImageUrl = imageUrl.StartsWith("http") 
+                                    ? imageUrl 
+                                    : $"{baseUrl}{imageUrl}";
+                                var fullResponse = await _imageHttpClient.GetAsync(fullImageUrl);
+                                if (fullResponse.IsSuccessStatusCode)
+                                {
+                                    var fullImageBytes = await fullResponse.Content.ReadAsByteArrayAsync();
+                                    var fullImageSource = ImageSource.FromStream(() => new MemoryStream(fullImageBytes));
+                                    
+                                    // Actualizar en el hilo principal
+                                    await MainThread.InvokeOnMainThreadAsync(() =>
+                                    {
+                                        // Buscar y actualizar el PhotoFindingViewModel correspondiente
+                                        var photoViewModel = _photoFindings.FirstOrDefault(p => p.ImageUrl == imageUrl);
+                                        if (photoViewModel != null)
+                                        {
+                                            photoViewModel.ImageSource = fullImageSource;
+                                            System.Diagnostics.Debug.WriteLine($"✅ Imagen completa cargada y actualizada: {fullImageUrl}");
+                                        }
+                                    });
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"⚠️ Error al cargar imagen completa en background: {ex.Message}");
+                            }
+                        });
+                        
+                        return thumbnailSource; // Devolver thumbnail inmediatamente
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"⚠️ Error al cargar thumbnail, usando imagen completa: {ex.Message}");
+                }
+            }
+
+            // Si no hay thumbnail o falló, cargar imagen completa
+            var fullImageUrl = imageUrl.StartsWith("http") 
+                ? imageUrl 
+                : imageUrl;
             
-            var response = await _imageHttpClient.GetAsync(optimizedUrl);
+            var response = await _imageHttpClient.GetAsync(fullImageUrl);
             if (response.IsSuccessStatusCode)
             {
                 var imageBytes = await response.Content.ReadAsByteArrayAsync();
@@ -349,12 +460,12 @@ public partial class InspectionDetailsPage : ContentPage
                 // Crear ImageSource desde bytes
                 var imageSource = ImageSource.FromStream(() => new MemoryStream(imageBytes));
                 
-                System.Diagnostics.Debug.WriteLine($"✅ Imagen cargada exitosamente desde el servidor: {optimizedUrl}");
+                System.Diagnostics.Debug.WriteLine($"✅ Imagen completa cargada desde el servidor: {fullImageUrl}");
                 return imageSource;
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error al cargar imagen desde servidor: {response.StatusCode} - {response.ReasonPhrase}. URL: {optimizedUrl}");
+                System.Diagnostics.Debug.WriteLine($"❌ Error al cargar imagen desde servidor: {response.StatusCode} - {response.ReasonPhrase}. URL: {fullImageUrl}");
                 return null;
             }
         }
@@ -420,6 +531,99 @@ public partial class InspectionDetailsPage : ContentPage
         finally
         {
             _isLoadingMore = false;
+        }
+    }
+
+    /// <summary>
+    /// Maneja el evento cuando el usuario presiona sobre una imagen.
+    /// Abre la imagen en pantalla completa.
+    /// </summary>
+    private async void OnImageTapped(object? sender, TappedEventArgs e)
+    {
+        if (e.Parameter is string imageUrl && !string.IsNullOrWhiteSpace(imageUrl))
+        {
+            try
+            {
+                // Obtener la URL de la imagen completa
+                var fullImageUrl = imageUrl;
+                
+                // Si es un thumbnail, obtener la URL de la imagen completa
+                if (imageUrl.Contains("/thumbnails/", StringComparison.Ordinal))
+                {
+                    // Convertir thumbnail URL a imagen completa
+                    // Formato: /api/v1/file/images/{orgId}/thumbnails/thumb_{filename}
+                    // A: /api/v1/file/images/{orgId}/{filename}
+                    fullImageUrl = imageUrl.Replace("/thumbnails/thumb_", "/");
+                }
+                
+                // Construir URL completa si es necesario
+                var baseUrl = _apiClient.BaseUrl.TrimEnd('/');
+                if (!fullImageUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                {
+                    fullImageUrl = $"{baseUrl}{fullImageUrl}";
+                }
+                
+                // Cargar la imagen completa
+                var fullImageSource = await LoadImageSecurelyAsync(fullImageUrl);
+                
+                if (fullImageSource == null)
+                {
+                    await DisplayAlertAsync("Error", "No se pudo cargar la imagen completa.", "OK");
+                    return;
+                }
+                
+                // Crear una página modal para mostrar la imagen en pantalla completa
+                var fullImagePage = new ContentPage
+                {
+                    BackgroundColor = Colors.Black,
+                    Title = "Imagen Completa"
+                };
+                
+                // Crear ScrollView para permitir zoom y desplazamiento
+                var scrollView = new ScrollView
+                {
+                    Content = new Image
+                    {
+                        Source = fullImageSource,
+                        Aspect = Aspect.AspectFit,
+                        HorizontalOptions = LayoutOptions.Center,
+                        VerticalOptions = LayoutOptions.Center
+                    }
+                };
+                
+                // Agregar botón de cerrar
+                var closeButton = new Button
+                {
+                    Text = "✕ Cerrar",
+                    BackgroundColor = Color.FromRgba(0, 0, 0, 128), // Semi-transparente
+                    TextColor = Colors.White,
+                    FontSize = 16,
+                    Margin = new Thickness(10, 10, 0, 0),
+                    HorizontalOptions = LayoutOptions.Start,
+                    VerticalOptions = LayoutOptions.Start,
+                    Padding = new Thickness(12, 8)
+                };
+                closeButton.Clicked += async (s, args) => await Navigation.PopModalAsync();
+                
+                // Crear Grid para superponer el botón sobre la imagen
+                var grid = new Grid
+                {
+                    Children = 
+                    {
+                        scrollView,
+                        closeButton
+                    }
+                };
+                
+                fullImagePage.Content = grid;
+                
+                await Navigation.PushModalAsync(fullImagePage);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error al abrir imagen en pantalla completa: {ex.Message}");
+                await DisplayAlertAsync("Error", "No se pudo abrir la imagen en pantalla completa.", "OK");
+            }
         }
     }
 }

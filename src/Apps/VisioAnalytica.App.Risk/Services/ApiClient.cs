@@ -630,6 +630,15 @@ public class ApiClient : IApiClient
     }
 
     /// <summary>
+    /// Obtiene la configuración de optimización de imágenes de la organización del usuario autenticado.
+    /// </summary>
+    public async Task<OrganizationSettingsDto?> GetOrganizationSettingsAsync()
+    {
+        var endpoint = "/api/v1/OrganizationSettings";
+        return await GetAsync<OrganizationSettingsDto>(endpoint);
+    }
+
+    /// <summary>
     /// Maneja respuestas 401 (Unauthorized) cerrando la sesión automáticamente y redirigiendo al login.
     /// </summary>
     private async Task HandleUnauthorizedAsync()

@@ -409,9 +409,9 @@ public partial class CapturePage : ContentPage
 
                         // Limpiar la imagen capturada
                         _capturedImageBytes = null;
-                        CapturedImage.IsVisible = false;
-                        PlaceholderLabel.IsVisible = true;
-                        AnalyzeButton.IsEnabled = false;
+                        if (CapturedImage != null) CapturedImage.IsVisible = false;
+                        if (PlaceholderLabel != null) PlaceholderLabel.IsVisible = true;
+                        if (AnalyzeButton != null) AnalyzeButton.IsEnabled = false;
 
                         // Navegar a la página de resultados
                         var navService = _navigationService ?? Handler?.MauiContext?.Services?.GetRequiredService<INavigationService>();
@@ -542,9 +542,9 @@ public partial class CapturePage : ContentPage
 
             // Limpiar la imagen capturada
             _capturedImageBytes = null;
-            CapturedImage.IsVisible = false;
-            PlaceholderLabel.IsVisible = true;
-            AnalyzeButton.IsEnabled = false;
+            if (CapturedImage != null) CapturedImage.IsVisible = false;
+            if (PlaceholderLabel != null) PlaceholderLabel.IsVisible = true;
+            if (AnalyzeButton != null) AnalyzeButton.IsEnabled = false;
 
             // Resetear estado de análisis después de éxito
             _isAnalyzing = false;

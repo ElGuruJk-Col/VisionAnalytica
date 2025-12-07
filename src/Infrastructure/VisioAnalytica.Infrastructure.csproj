@@ -10,6 +10,8 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
     <!-- Forzar versión segura de Newtonsoft.Json para mitigar vulnerabilidad GHSA-5crp-9r3c-p9vr -->
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <!-- System.Drawing.Common es parte del framework .NET, no es un paquete externo con vulnerabilidades -->
+    <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -28,6 +30,9 @@
     <!-- Optimizaciones específicas para Infrastructure (tiene muchos paquetes) -->
     <!-- Excluir analizadores de paquetes en Debug para acelerar compilación -->
     <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+    
+    <!-- Suprimir warnings CA1416 para System.Drawing.Common (solo se usa en Windows) -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
 
 </Project>

@@ -4,9 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using System.Security.Claims;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Formats.Jpeg;
 using VisioAnalytica.Core.Constants;
 using VisioAnalytica.Core.Interfaces;
 using VisioAnalytica.Core.Models;
@@ -176,13 +173,13 @@ namespace VisioAnalytica.Api.Controllers
         /// <summary>
         /// Sirve una imagen de forma segura.
         /// Verifica permisos basados en roles y empresas afiliadas.
-        /// Soporta parámetros de optimización: width (ancho máximo) y quality (calidad 0-100).
+        /// Nota: Los parámetros width y quality son aceptados pero ignorados (compatibilidad con cliente).
         /// </summary>
         /// <param name="organizationId">ID de la organización (parte de la ruta)</param>
         /// <param name="fileName">Nombre del archivo</param>
         /// <param name="affiliatedCompanyId">ID de la empresa afiliada (opcional, para validación adicional)</param>
-        /// <param name="width">Ancho máximo de la imagen en píxeles (opcional, para redimensionamiento)</param>
-        /// <param name="quality">Calidad de compresión JPEG (0-100, opcional, por defecto 85)</param>
+        /// <param name="width">Ancho máximo (ignorado, mantenido para compatibilidad con cliente)</param>
+        /// <param name="quality">Calidad (ignorado, mantenido para compatibilidad con cliente)</param>
         /// <returns>El archivo de imagen si el usuario tiene permisos, o 403/404 si no</returns>
         [HttpGet("images/{organizationId:guid}/{fileName}")]
         [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
@@ -251,33 +248,90 @@ namespace VisioAnalytica.Api.Controllers
             // 5. Determinar el content type basado en la extensión
             var contentType = GetContentType(fileName);
 
-            // 6. Procesar imagen si se solicitan optimizaciones (width o quality)
+            // 6. Servir el archivo original
+            // Nota: Los parámetros width y quality son aceptados para compatibilidad con el cliente
+            // pero no se procesan (evita dependencias externas con vulnerabilidades)
             if (width.HasValue || quality.HasValue)
             {
-                try
-                {
-                    var processedImage = await ProcessImageAsync(sanitizedPath, width, quality ?? 85);
-                    if (processedImage != null)
-                    {
-                        _logger.LogInformation(
-                            "Imagen procesada y servida. UserId: {UserId}, OrgId: {OrgId}, FileName: {FileName}, Width: {Width}, Quality: {Quality}", 
-                            userId, organizationId, fileName, width, quality ?? 85);
-                        return File(processedImage, contentType, fileName);
-                    }
-                    // Si falla el procesamiento, continuar con la imagen original
-                    _logger.LogWarning("Error al procesar imagen, sirviendo original. FileName: {FileName}", fileName);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error al procesar imagen, sirviendo original. FileName: {FileName}", fileName);
-                    // Continuar con la imagen original si falla el procesamiento
-                }
+                _logger.LogDebug(
+                    "Parámetros de optimización recibidos pero ignorados (width: {Width}, quality: {Quality}). " +
+                    "Sirviendo imagen original. FileName: {FileName}", 
+                    width, quality, fileName);
             }
 
-            // 7. Servir el archivo (original o si no se solicitaron optimizaciones)
             _logger.LogInformation(
                 "Imagen servida correctamente. UserId: {UserId}, OrgId: {OrgId}, FileName: {FileName}", 
                 userId, organizationId, fileName);
+
+            return PhysicalFile(sanitizedPath, contentType, fileName);
+        }
+
+        /// <summary>
+        /// Sirve un thumbnail de imagen de forma segura.
+        /// Si el thumbnail no existe, devuelve 404.
+        /// </summary>
+        /// <param name="organizationId">ID de la organización</param>
+        /// <param name="fileName">Nombre del archivo del thumbnail (formato: thumb_{originalFileName})</param>
+        /// <param name="affiliatedCompanyId">ID de la empresa afiliada (opcional, para validación adicional)</param>
+        /// <returns>El thumbnail si existe y el usuario tiene permisos, o 404 si no existe</returns>
+        [HttpGet("images/{organizationId:guid}/thumbnails/{fileName}")]
+        [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetThumbnail(
+            Guid organizationId, 
+            string fileName, 
+            [FromQuery] Guid? affiliatedCompanyId = null)
+        {
+            // Verificar permisos (misma lógica que GetImage)
+            var hasAccess = await HasAccessToImageAsync(organizationId, fileName, affiliatedCompanyId);
+            if (!hasAccess)
+            {
+                var currentUserId = GetCurrentUserId();
+                _logger.LogWarning(
+                    "Intento de acceso no autorizado a thumbnail. " +
+                    "UserId: {UserId}, OrgId: {OrgId}, FileName: {FileName}, AffiliatedCompanyId: {CompanyId}", 
+                    currentUserId, organizationId, fileName, affiliatedCompanyId);
+                return StatusCode(StatusCodes.Status403Forbidden, 
+                    "No tienes permiso para acceder a este thumbnail.");
+            }
+
+            // Construir ruta del thumbnail: uploads/{orgId}/thumbnails/{fileName}
+            var basePath = GetStorageBasePath();
+            var orgFolder = Path.Combine(basePath, organizationId.ToString());
+            var thumbnailsFolder = Path.Combine(orgFolder, "thumbnails");
+            var filePath = Path.Combine(thumbnailsFolder, fileName);
+
+            // Sanitizar para prevenir path traversal
+            var sanitizedPath = Path.GetFullPath(filePath);
+            var sanitizedBasePath = Path.GetFullPath(thumbnailsFolder);
+            
+            if (!sanitizedPath.StartsWith(sanitizedBasePath, StringComparison.OrdinalIgnoreCase))
+            {
+                var userIdForLog = GetCurrentUserId();
+                _logger.LogWarning(
+                    "Intento de path traversal attack en thumbnail. " +
+                    "UserId: {UserId}, OrgId: {OrgId}, FileName: {FileName}", 
+                    userIdForLog, organizationId, fileName);
+                return StatusCode(StatusCodes.Status400BadRequest, "Nombre de archivo inválido.");
+            }
+
+            // Verificar que el thumbnail exista
+            if (!System.IO.File.Exists(sanitizedPath))
+            {
+                _logger.LogDebug(
+                    "Thumbnail no encontrado. OrgId: {OrgId}, FileName: {FileName}, Path: {Path}", 
+                    organizationId, fileName, sanitizedPath);
+                return NotFound("El thumbnail solicitado no existe.");
+            }
+
+            var contentType = GetContentType(fileName);
+            var userIdForInfo = GetCurrentUserId();
+            
+            _logger.LogInformation(
+                "Thumbnail servido correctamente. UserId: {UserId}, OrgId: {OrgId}, FileName: {FileName}", 
+                userIdForInfo, organizationId, fileName);
 
             return PhysicalFile(sanitizedPath, contentType, fileName);
         }
@@ -405,69 +459,6 @@ namespace VisioAnalytica.Api.Controllers
                 
                 // Crear ruta: {raiz_repositorio}/Storage/Images
                 return Path.Combine(contentRoot, "Storage", "Images");
-            }
-        }
-
-        /// <summary>
-        /// Procesa una imagen aplicando redimensionamiento y/o compresión según los parámetros.
-        /// </summary>
-        /// <param name="imagePath">Ruta completa del archivo de imagen</param>
-        /// <param name="maxWidth">Ancho máximo en píxeles (opcional)</param>
-        /// <param name="quality">Calidad de compresión JPEG (0-100, por defecto 85)</param>
-        /// <returns>Bytes de la imagen procesada, o null si falla</returns>
-        private async Task<byte[]?> ProcessImageAsync(string imagePath, int? maxWidth, int quality)
-        {
-            try
-            {
-                // Validar parámetros
-                if (maxWidth.HasValue && maxWidth.Value <= 0)
-                {
-                    _logger.LogWarning("Ancho máximo inválido: {Width}", maxWidth);
-                    return null;
-                }
-
-                if (quality < 0 || quality > 100)
-                {
-                    _logger.LogWarning("Calidad inválida: {Quality}, usando 85 por defecto", quality);
-                    quality = 85;
-                }
-
-                // Cargar imagen
-                using var image = await Image.LoadAsync(imagePath);
-
-                // Redimensionar si se especifica ancho máximo
-                var originalWidth = image.Width;
-                var originalHeight = image.Height;
-                
-                if (maxWidth.HasValue && image.Width > maxWidth.Value)
-                {
-                    var aspectRatio = (float)image.Height / image.Width;
-                    var newHeight = (int)(maxWidth.Value * aspectRatio);
-
-                    image.Mutate(x => x.Resize(new ResizeOptions
-                    {
-                        Size = new Size(maxWidth.Value, newHeight),
-                        Mode = ResizeMode.Max // Mantiene aspect ratio
-                    }));
-
-                    _logger.LogDebug("Imagen redimensionada: {OriginalWidth}x{OriginalHeight} -> {NewWidth}x{NewHeight}",
-                        originalWidth, originalHeight, maxWidth.Value, newHeight);
-                }
-
-                // Comprimir y convertir a JPEG con calidad especificada
-                using var memoryStream = new MemoryStream();
-                var encoder = new JpegEncoder
-                {
-                    Quality = quality
-                };
-
-                await image.SaveAsync(memoryStream, encoder);
-                return memoryStream.ToArray();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al procesar imagen: {ImagePath}", imagePath);
-                return null;
             }
         }
 

@@ -27,6 +27,12 @@ namespace VisioAnalytica.Core.Models
         /// </summary>
         public virtual ICollection<User> Users { get; set; }
 
+        /// <summary>
+        /// Propiedad de navegación a la configuración de la organización.
+        /// Relación 1:1 con OrganizationSettings.
+        /// </summary>
+        public virtual OrganizationSettings? Settings { get; set; }
+
         public Organization()
         {
             // Buena práctica: Inicializar las colecciones en el constructor

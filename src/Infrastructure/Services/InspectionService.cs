@@ -15,12 +15,14 @@ public class InspectionService(
     VisioAnalyticaDbContext context,
     IFileStorage fileStorage,
     IBackgroundJobClient backgroundJobClient,
-    ILogger<InspectionService> logger) : IInspectionService
+    ILogger<InspectionService> logger,
+    ServerImageOptimizationService? imageOptimizationService = null) : IInspectionService
 {
     private readonly VisioAnalyticaDbContext _context = context;
     private readonly IFileStorage _fileStorage = fileStorage;
     private readonly IBackgroundJobClient _backgroundJobClient = backgroundJobClient;
     private readonly ILogger<InspectionService> _logger = logger;
+    private readonly ServerImageOptimizationService? _imageOptimizationService = imageOptimizationService;
 
     public async Task<InspectionDto> CreateInspectionAsync(CreateInspectionDto request, Guid userId, Guid organizationId)
     {
@@ -48,6 +50,15 @@ public class InspectionService(
 
         _context.Inspections.Add(inspection);
 
+        // Obtener configuración de la organización para optimización
+        var orgSettings = await _context.OrganizationSettings
+            .FirstOrDefaultAsync(s => s.OrganizationId == organizationId);
+
+        // Valores por defecto si no hay configuración
+        var generateThumbnails = orgSettings?.GenerateThumbnails ?? true;
+        var thumbnailWidth = orgSettings?.ThumbnailWidth ?? 400;
+        var thumbnailQuality = orgSettings?.ThumbnailQuality ?? 70;
+
         // Guardar las fotos
         var photos = new List<Photo>();
         foreach (var photoDto in request.Photos)
@@ -59,6 +70,31 @@ public class InspectionService(
 
                 // Guardar la imagen
                 var imageUrl = await _fileStorage.SaveImageAsync(imageBytes, null, organizationId);
+
+                // Generar thumbnail automáticamente si está habilitado
+                if (generateThumbnails && _imageOptimizationService != null)
+                {
+                    try
+                    {
+                        var thumbnailBytes = _imageOptimizationService.GenerateThumbnail(
+                            imageBytes, 
+                            thumbnailWidth, 
+                            thumbnailQuality);
+
+                        if (thumbnailBytes != null)
+                        {
+                            // Extraer nombre del archivo de la URL de la imagen
+                            var fileName = imageUrl.Split('/').Last().Split('?').First();
+                            await _fileStorage.SaveThumbnailAsync(thumbnailBytes, fileName, organizationId);
+                            _logger.LogDebug("Thumbnail generado automáticamente para imagen: {ImageUrl}", imageUrl);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // No fallar si el thumbnail no se puede generar, solo loguear
+                        _logger.LogWarning(ex, "No se pudo generar thumbnail para imagen: {ImageUrl}", imageUrl);
+                    }
+                }
 
                 var photo = new Photo
                 {

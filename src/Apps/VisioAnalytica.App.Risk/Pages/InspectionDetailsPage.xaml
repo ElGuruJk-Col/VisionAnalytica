@@ -81,7 +81,12 @@
                                         BackgroundColor="{StaticResource Gray100}">
                                     <Grid HeightRequest="250" BackgroundColor="White">
                                         <Image Source="{Binding ImageSource}"
-                                               Aspect="AspectFit" />
+                                               Aspect="AspectFit">
+                                            <Image.GestureRecognizers>
+                                                <TapGestureRecognizer Tapped="OnImageTapped" 
+                                                                      CommandParameter="{Binding ImageUrl}" />
+                                            </Image.GestureRecognizers>
+                                        </Image>
                                         <VerticalStackLayout HorizontalOptions="Center"
                                                            VerticalOptions="Center"
                                                            Spacing="8"

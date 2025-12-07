@@ -27,6 +27,9 @@ namespace VisioAnalytica.Infrastructure.Data
         // --- REFRESH TOKENS (Sistema de Renovación de Tokens) ---
         public DbSet<RefreshToken> RefreshTokens { get; set; }
 
+        // --- CONFIGURACIÓN DE ORGANIZACIÓN (Optimización de Imágenes) ---
+        public DbSet<OrganizationSettings> OrganizationSettings { get; set; }
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder); // CRÍTICO: Aplica las reglas de Identity
@@ -65,6 +68,12 @@ namespace VisioAnalytica.Infrastructure.Data
                       .WithOne(i => i.Organization)
                       .HasForeignKey(i => i.OrganizationId)
                       .OnDelete(DeleteBehavior.Restrict); // Las Inspecciones NO se borran si la Org se borra.
+
+                // Relación 1:1 con OrganizationSettings
+                entity.HasOne(o => o.Settings)
+                      .WithOne(s => s.Organization)
+                      .HasForeignKey<OrganizationSettings>(s => s.OrganizationId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
 
             // 3. Reglas para la entidad Inspection
@@ -172,6 +181,19 @@ namespace VisioAnalytica.Infrastructure.Data
 
                 // Índice compuesto para búsquedas por usuario y expiración
                 entity.HasIndex(rt => new { rt.UserId, rt.ExpiresAt });
+            });
+
+            // 8. Reglas para la entidad OrganizationSettings
+            builder.Entity<OrganizationSettings>(entity =>
+            {
+                // Relación 1:1 con Organization
+                entity.HasOne(os => os.Organization)
+                      .WithOne()
+                      .HasForeignKey<OrganizationSettings>(os => os.OrganizationId)
+                      .OnDelete(DeleteBehavior.Cascade); // Si se borra la organización, se borra su configuración
+
+                // Índice único en OrganizationId para garantizar una sola configuración por organización
+                entity.HasIndex(os => os.OrganizationId).IsUnique();
             });
         }
     }

@@ -265,13 +265,22 @@ public class AuthService : IAuthService
         System.Diagnostics.Debug.WriteLine($"[AuthService] SaveAuthAsync: token length={(token?.Length ?? 0)}, email={email}");
 
         // Decodificar el token para extraer información adicional
-        DecodeToken(token);
+        if (!string.IsNullOrEmpty(token))
+        {
+            DecodeToken(token);
+        }
 
         System.Diagnostics.Debug.WriteLine($"[AuthService] SaveAuthAsync: roles={string.Join(',', _currentUserRoles)}; mustChangePassword={_mustChangePassword}");
 
         // Guardar en SecureStorage (almacenamiento seguro)
-        await SecureStorage.SetAsync(TokenKey, token);
-        await SecureStorage.SetAsync(UserEmailKey, email);
+        if (!string.IsNullOrEmpty(token))
+        {
+            await SecureStorage.SetAsync(TokenKey, token);
+        }
+        if (!string.IsNullOrEmpty(email))
+        {
+            await SecureStorage.SetAsync(UserEmailKey, email);
+        }
         
         // Guardar refresh token si está presente
         if (!string.IsNullOrWhiteSpace(refreshToken))

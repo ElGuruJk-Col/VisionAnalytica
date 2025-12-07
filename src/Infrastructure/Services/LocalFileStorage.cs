@@ -197,6 +197,65 @@ namespace VisioAnalytica.Infrastructure.Services
             }
         }
         
+        public async Task<string> SaveThumbnailAsync(byte[] thumbnailBytes, string originalFileName, Guid? organizationId = null)
+        {
+            try
+            {
+                // Generar nombre del thumbnail: thumb_{originalFileName}
+                var fileNameWithoutExt = Path.GetFileNameWithoutExtension(originalFileName);
+                var extension = Path.GetExtension(originalFileName);
+                var thumbnailFileName = $"thumb_{fileNameWithoutExt}{extension}";
+                thumbnailFileName = SanitizeFileName(thumbnailFileName);
+
+                // Construir la ruta completa
+                string finalPath;
+                if (organizationId.HasValue)
+                {
+                    // Organizar por organización: uploads/{orgId}/thumbnails/{filename}
+                    var orgFolder = Path.Combine(_uploadsPath, organizationId.Value.ToString());
+                    var thumbnailsFolder = Path.Combine(orgFolder, "thumbnails");
+                    if (!Directory.Exists(thumbnailsFolder))
+                    {
+                        Directory.CreateDirectory(thumbnailsFolder);
+                    }
+                    finalPath = Path.Combine(thumbnailsFolder, thumbnailFileName);
+                }
+                else
+                {
+                    var thumbnailsFolder = Path.Combine(_uploadsPath, "thumbnails");
+                    if (!Directory.Exists(thumbnailsFolder))
+                    {
+                        Directory.CreateDirectory(thumbnailsFolder);
+                    }
+                    finalPath = Path.Combine(thumbnailsFolder, thumbnailFileName);
+                }
+
+                // Guardar el thumbnail
+                await File.WriteAllBytesAsync(finalPath, thumbnailBytes);
+                _logger.LogInformation("Thumbnail guardado en: {FilePath}", finalPath);
+
+                // Devolver la URL del endpoint seguro del FileController
+                // Formato: /api/v1/file/images/{orgId}/thumbnails/{filename}
+                if (organizationId.HasValue)
+                {
+                    return $"/api/v1/file/images/{organizationId.Value}/thumbnails/{thumbnailFileName}";
+                }
+                else
+                {
+                    var basePath = _environment.WebRootPath ?? _environment.ContentRootPath;
+                    var relativePath = finalPath.Replace(basePath, "")
+                                                .Replace("\\", "/")
+                                                .TrimStart('/');
+                    return $"/{relativePath}";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al guardar thumbnail. FileName: {FileName}, OrgId: {OrgId}", originalFileName, organizationId);
+                throw new InvalidOperationException("No se pudo guardar el thumbnail en el almacenamiento local.", ex);
+            }
+        }
+
         public async Task<bool> DeleteImageAsync(string imageUrl)
         {
             try

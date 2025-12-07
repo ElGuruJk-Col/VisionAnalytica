@@ -4,14 +4,16 @@
        PROPIEDADES GENERALES
        ───────────────────────────── -->
   <PropertyGroup>
-    <!-- Frameworks específicos de MAUI - NO usar net10.0 genérico -->
+    <!-- Frameworks específicos de MAUI -->
     <TargetFrameworks>net10.0-android;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
 
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">
       $(TargetFrameworks);net10.0-windows10.0.19041.0
     </TargetFrameworks>
     
-    <!-- Evitar que MSBuild intente compilar para frameworks genéricos -->
+    <!-- Asegurar que TargetFramework NO se herede de Directory.Build.props -->
+    <TargetFramework Condition="'$(TargetFrameworks)' != ''"></TargetFramework>
+    
     <DisableMauiAnalyzers>false</DisableMauiAnalyzers>
     <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
 
@@ -36,9 +38,6 @@
       false
     </WindowsAppSDKSelfContained>
 
-    <!-- Android -->
-    <AndroidJavaMaxHeapSize>3G</AndroidJavaMaxHeapSize>
-
     <!-- Versiones mínimas -->
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
@@ -51,8 +50,6 @@
       android-arm64;android-x64;android-x86
     </RuntimeIdentifiers>
 
-    <!-- iOS: NO indicar múltiples RIDs (VS lo maneja automáticamente) -->
-
     <RuntimeIdentifiers Condition="'$(TargetFramework)' == 'net10.0-maccatalyst'">
       maccatalyst-x64;maccatalyst-arm64
     </RuntimeIdentifiers>
@@ -60,6 +57,24 @@
     <RuntimeIdentifiers Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
       win-x64;win-x86;win-arm64
     </RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <!-- ─────────────────────────────
+       OPTIMIZACIONES ANDROID (CRÍTICO PARA D8)
+       ───────────────────────────── -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-android'">
+    <!-- AUMENTO DE MEMORIA: Crucial para evitar el error _CompileToDalvik lento -->
+    <!-- Se ha subido a 4G. Si tienes 32GB de RAM, puedes probar con 6G -->
+    <AndroidJavaMaxHeapSize>4G</AndroidJavaMaxHeapSize>
+    
+    <EmbedAssembliesIntoApk>false</EmbedAssembliesIntoApk>
+  </PropertyGroup>
+
+  <!-- Configuración específica para Debug en Android: VELOCIDAD -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-android' And '$(Configuration)' == 'Debug'">
+    <!-- Fast Deployment: Solo 'dexa' lo que cambió -->
+    <AndroidEnableDexingArtifactTransform>true</AndroidEnableDexingArtifactTransform>
+    <AndroidFastDeploymentType>Assemblies:Dexes</AndroidFastDeploymentType>
   </PropertyGroup>
 
   <!-- ─────────────────────────────
@@ -94,11 +109,8 @@
     <Optimize>true</Optimize>
     <AndroidPackageFormat>aab</AndroidPackageFormat>
     <AotAssemblies>true</AotAssemblies>
-  </PropertyGroup>
-
-  <!-- Android Extra -->
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-android'">
-    <EmbedAssembliesIntoApk>false</EmbedAssembliesIntoApk>
+    <!-- R8 es el default, pero aseguramos que esté activo para Release -->
+    <AndroidLinkTool>r8</AndroidLinkTool>
   </PropertyGroup>
 
   <!-- ─────────────────────────────
@@ -135,6 +147,7 @@
     <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" Condition="$([MSBuild]::IsOSPlatform('windows'))" />
   </ItemGroup>
 
   <!-- ─────────────────────────────

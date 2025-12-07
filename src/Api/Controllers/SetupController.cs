@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using VisioAnalytica.Core.Constants;
 using VisioAnalytica.Core.Models;
 using VisioAnalytica.Infrastructure.Data;
+using VisioAnalytica.Infrastructure.Extensions;
 
 namespace VisioAnalytica.Api.Controllers;
 
@@ -78,6 +79,14 @@ public class SetupController : ControllerBase
                 _context.Organizations.Add(visioOrg);
                 await _context.SaveChangesAsync();
                 _logger.LogInformation("Organización 'VisioAnalytica' creada.");
+
+                // Crear configuración por defecto para la organización automáticamente
+                await _context.EnsureDefaultSettingsAsync(visioOrg.Id, _logger);
+            }
+            else
+            {
+                // Asegurar que la organización existente tenga configuración
+                await _context.EnsureDefaultSettingsAsync(visioOrg.Id, _logger);
             }
 
             // 4. Verificar que el email no esté en uso

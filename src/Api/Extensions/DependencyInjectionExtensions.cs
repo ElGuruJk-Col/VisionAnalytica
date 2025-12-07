@@ -149,6 +149,9 @@ namespace VisioAnalytica.Api.Extensions
             // 4.J: ¡NUEVO REGISTRO! Servicio de Inspecciones
             services.AddScoped<IInspectionService, InspectionService>();
             
+            // 4.J.1: Servicio de optimización de imágenes en servidor
+            services.AddScoped<ServerImageOptimizationService>();
+            
             // 4.K: ¡NUEVO REGISTRO! Orquestador de Análisis
             services.AddScoped<IAnalysisOrchestrator, AnalysisOrchestrator>();
 

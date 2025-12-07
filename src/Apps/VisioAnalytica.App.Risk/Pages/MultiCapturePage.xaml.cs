@@ -24,13 +24,18 @@ public partial class MultiCapturePage : ContentPage
     private readonly IAuthService _authService;
     private readonly INotificationService _notificationService;
     private readonly INavigationService? _navigationService;
+    private readonly IImageOptimizationService? _imageOptimizationService;
     private readonly ObservableCollection<CapturedPhotoViewModel> _capturedPhotos = [];
     private IList<AffiliatedCompanyDto>? _assignedCompanies;
     private AffiliatedCompanyDto? _selectedCompany;
     private bool _isAnalyzing;
     private readonly SemaphoreSlim _analyzeSemaphore = new SemaphoreSlim(1, 1); // Protección contra ejecución concurrente
 
-    public MultiCapturePage(IApiClient apiClient, IAuthService authService, INotificationService notificationService, INavigationService? navigationService = null)
+    // Valores por defecto para optimización (se obtienen de la configuración de organización)
+    private int _maxWidth = 1920;
+    private int _quality = 85;
+
+    public MultiCapturePage(IApiClient apiClient, IAuthService authService, INotificationService notificationService, INavigationService? navigationService = null, IImageOptimizationService? imageOptimizationService = null)
     {
         var instanceId = Guid.NewGuid();
         System.Diagnostics.Debug.WriteLine($"🏗️ [MultiCapturePage] Nueva instancia creada - InstanceId: {instanceId}, Thread: {Thread.CurrentThread.ManagedThreadId}, Time: {DateTime.Now:HH:mm:ss.fff}");
@@ -40,6 +45,7 @@ public partial class MultiCapturePage : ContentPage
         _authService = authService;
         _notificationService = notificationService;
         _navigationService = navigationService;
+        _imageOptimizationService = imageOptimizationService;
         
         // ═══════════════════════════════════════════════════════════════
         // PROTECCIÓN: Desregistrar y registrar evento para evitar duplicados
@@ -70,6 +76,9 @@ public partial class MultiCapturePage : ContentPage
     {
         base.OnAppearing();
         
+        // Cargar configuración de organización para optimización
+        await LoadOrganizationSettings();
+        
         // Cargar empresas asignadas si es Inspector
         var roles = _authService.CurrentUserRoles;
         if (roles.Contains("Inspector"))
@@ -82,6 +91,29 @@ public partial class MultiCapturePage : ContentPage
             CompanyWarningLabel.IsVisible = false;
             // Para roles que no son Inspector, habilitar botón de captura
             UpdateButtonsState();
+        }
+    }
+
+    private async Task LoadOrganizationSettings()
+    {
+        try
+        {
+            var settings = await _apiClient.GetOrganizationSettingsAsync();
+            if (settings != null && settings.EnableImageOptimization)
+            {
+                _maxWidth = settings.MaxImageWidth;
+                _quality = settings.ImageQuality;
+                System.Diagnostics.Debug.WriteLine($"✅ Configuración de organización cargada: MaxWidth={_maxWidth}, Quality={_quality}");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("⚠️ Optimización de imágenes deshabilitada o configuración no disponible, usando valores por defecto");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"⚠️ Error al cargar configuración de organización: {ex.Message}. Usando valores por defecto");
+            // Usar valores por defecto si falla
         }
     }
 
@@ -484,10 +516,47 @@ public partial class MultiCapturePage : ContentPage
             StatusBorder.Stroke = (Color)Application.Current!.Resources["Primary"]!;
             StatusBorder.BackgroundColor = (Color)Application.Current!.Resources["Gray50"]!;
 
-            // Convertir fotos a  
-            var photoDtos = selectedPhotos.Select(p => new PhotoDto(
-                Convert.ToBase64String(p.ImageBytes),
-                p.CapturedAt,
+            // OPTIMIZACIÓN: Optimizar imágenes antes de enviar (reduce tamaño y mejora rendimiento)
+            System.Diagnostics.Debug.WriteLine($"🖼️ Optimizando {selectedPhotos.Count} imágenes antes de enviar...");
+            var optimizedPhotos = new List<(byte[] optimizedBytes, DateTime capturedAt)>();
+            
+            foreach (var photo in selectedPhotos)
+            {
+                byte[] bytesToSend = photo.ImageBytes;
+                
+                // Optimizar imagen si el servicio está disponible
+                if (_imageOptimizationService != null)
+                {
+                    try
+                    {
+                        var optimized = await _imageOptimizationService.OptimizeImageAsync(
+                            photo.ImageBytes, 
+                            _maxWidth, 
+                            _quality);
+                        
+                        if (optimized != null && optimized.Length < photo.ImageBytes.Length)
+                        {
+                            bytesToSend = optimized;
+                            var reductionPercent = 100 - (optimized.Length * 100 / photo.ImageBytes.Length);
+                            System.Diagnostics.Debug.WriteLine($"✅ Imagen optimizada: {photo.ImageBytes.Length / 1024}KB -> {optimized.Length / 1024}KB ({reductionPercent}% reducción)");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"⚠️ Error al optimizar imagen, usando original: {ex.Message}");
+                        // Si falla la optimización, usar imagen original
+                    }
+                }
+                
+                optimizedPhotos.Add((bytesToSend, photo.CapturedAt));
+            }
+            
+            System.Diagnostics.Debug.WriteLine($"✅ {optimizedPhotos.Count} imágenes optimizadas listas para enviar");
+
+            // Convertir fotos optimizadas a DTOs
+            var photoDtos = optimizedPhotos.Select(p => new PhotoDto(
+                Convert.ToBase64String(p.optimizedBytes),
+                p.capturedAt,
                 null
             )).ToList();
 

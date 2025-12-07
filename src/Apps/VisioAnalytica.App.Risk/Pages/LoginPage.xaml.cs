@@ -140,7 +140,7 @@ public partial class LoginPage : ContentPage
                             // Mostrar mensaje y bloquear acceso
                             await MainThread.InvokeOnMainThreadAsync(async () =>
                             {
-                                await DisplayAlert("Acceso Deshabilitado",
+                                await DisplayAlertAsync("Acceso Deshabilitado",
                                     "Tu ingreso está deshabilitado, debes tener al menos una empresa asignada. Se ha notificado a tu superior.",
                                     "OK");
                             });
@@ -171,7 +171,7 @@ public partial class LoginPage : ContentPage
                     // Debug alert to confirm navigation (temporary)
                     try
                     {
-                        await DisplayAlert("Debug", "Login exitoso. Navegando a Main.", "OK");
+                        await DisplayAlertAsync("Debug", "Login exitoso. Navegando a Main.", "OK");
                     }
                     catch { }
                 });

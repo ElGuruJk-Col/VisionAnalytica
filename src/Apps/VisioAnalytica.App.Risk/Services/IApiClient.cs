@@ -87,5 +87,10 @@ public interface IApiClient
     /// Renueva el access token usando un refresh token.
     /// </summary>
     Task<RefreshTokenResponse?> RefreshTokenAsync(string refreshToken);
+
+    /// <summary>
+    /// Obtiene la configuración de optimización de imágenes de la organización del usuario autenticado.
+    /// </summary>
+    Task<OrganizationSettingsDto?> GetOrganizationSettingsAsync();
 }
 

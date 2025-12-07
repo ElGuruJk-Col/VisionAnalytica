@@ -59,6 +59,7 @@ public static class MauiProgram
 		});
 		
 		builder.Services.AddSingleton<IAnalysisService, AnalysisService>();
+		builder.Services.AddSingleton<IImageOptimizationService, ImageOptimizationService>();
 
 		// Registrar páginas usando DI automático (más eficiente que factory functions explícitas)
 		// DI resolverá automáticamente las dependencias desde los constructores
