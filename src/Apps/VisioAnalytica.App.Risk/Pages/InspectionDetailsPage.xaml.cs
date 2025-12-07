@@ -198,10 +198,12 @@ public partial class InspectionDetailsPage : ContentPage
                 {
                     var loadTasks = photoViewModels.Select(async (viewModel, index) =>
                     {
+                        var semaphoreAcquired = false;
                         try
                         {
                             // Esperar turno para descargar (máximo 3 simultáneas)
                             await _downloadSemaphore.WaitAsync();
+                            semaphoreAcquired = true; // Marcar como adquirido solo si WaitAsync() fue exitoso
                             
                             // Pequeño delay para no sobrecargar (opcional)
                             if (index > 0)
@@ -223,7 +225,11 @@ public partial class InspectionDetailsPage : ContentPage
                         }
                         finally
                         {
-                            _downloadSemaphore.Release();
+                            // Solo liberar el semáforo si fue adquirido exitosamente
+                            if (semaphoreAcquired)
+                            {
+                                _downloadSemaphore.Release();
+                            }
                         }
                     });
                     
