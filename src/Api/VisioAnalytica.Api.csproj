@@ -25,6 +25,8 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
     <!-- Forzar versión más reciente de Newtonsoft.Json para mitigar vulnerabilidad GHSA-5crp-9r3c-p9vr -->
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <!-- Biblioteca para procesamiento de imágenes (redimensionamiento y compresión) -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
 
   <ItemGroup>
