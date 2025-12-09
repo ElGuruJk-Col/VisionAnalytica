@@ -593,19 +593,21 @@ public partial class InspectionHistoryPage : ContentPage
             _currentPageNumber = 1;
             _hasMorePages = true;
             _inspections.Clear();
-            
-            // Cancelar carga anterior si existe
+
+            // Cancelar carga anterior si existe y crear un nuevo token para esta recarga
             _loadCancellationToken?.Cancel();
-            
+            _loadCancellationToken = new CancellationTokenSource();
+            var ct = _loadCancellationToken.Token;
+
             // Mostrar indicador de carga
             MainThread.BeginInvokeOnMainThread(SetLoadingTrue);
-            
+
             // Cargar en background para no bloquear la UI
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    await LoadInspectionsAsync(1, append: false, _loadCancellationToken?.Token ?? CancellationToken.None).ConfigureAwait(false);
+                    await LoadInspectionsAsync(1, append: false, ct).ConfigureAwait(false);
                     _isDataLoaded = true;
                     _lastLoadTime = DateTime.Now;
                 }
@@ -758,6 +760,9 @@ public partial class InspectionHistoryPage : ContentPage
             companyList.AddRange(_companies.Select(c => c.Name));
         }
         CompanyFilterPicker.ItemsSource = companyList;
+        
+        // Establecer selección inicial
+        CompanyFilterPicker.SelectedIndex = 0;
     }
 
     private void HideCompanyFilter()
