@@ -45,8 +45,8 @@ public interface IInspectionService
     Task<InspectionAnalysisStatusDto> GetAnalysisStatusAsync(Guid inspectionId, Guid userId, Guid organizationId);
 
     /// <summary>
-    /// Obtiene los hallazgos de una inspección de análisis (generada por una foto).
+    /// Obtiene los hallazgos de una foto específica.
     /// </summary>
-    Task<List<FindingDetailDto>> GetInspectionFindingsAsync(Guid analysisInspectionId, Guid userId, Guid organizationId);
+    Task<List<FindingDetailDto>> GetPhotoFindingsAsync(Guid photoId, Guid userId, Guid organizationId);
 }
 

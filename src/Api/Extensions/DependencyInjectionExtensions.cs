@@ -66,6 +66,19 @@ namespace VisioAnalytica.Api.Extensions
                     // AGREGAR ESTE EVENT HANDLER PARA LOGGING
                     options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
                     {
+                        OnMessageReceived = context =>
+                        {
+                            var accessToken = context.Request.Query["access_token"];
+                            var path = context.HttpContext.Request.Path;
+                            
+                            // Permitir token en query string para endpoints de imágenes (necesario para UriImageSource en MAUI)
+                            if (!string.IsNullOrEmpty(accessToken) && 
+                                (path.StartsWithSegments("/api/v1/file/images")))
+                            {
+                                context.Token = accessToken;
+                            }
+                            return Task.CompletedTask;
+                        },
                         OnAuthenticationFailed = context =>
                         {
                             var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();

@@ -27,7 +27,6 @@ namespace VisioAnalytica.Core.Models.Dtos
     (
         Guid Id,
         DateTime AnalysisDate,
-        string ImageUrl,
         string UserName,
         string AffiliatedCompanyName,
         string Status,
@@ -41,7 +40,6 @@ namespace VisioAnalytica.Core.Models.Dtos
     (
         Guid Id,
         DateTime AnalysisDate,
-        string ImageUrl,
         string UserName,
         IReadOnlyList<FindingDetailDto> Findings
     );

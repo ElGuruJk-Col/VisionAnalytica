@@ -74,9 +74,9 @@ public interface IApiClient
     Task<InspectionAnalysisStatusDto> GetAnalysisStatusAsync(Guid inspectionId);
 
     /// <summary>
-    /// Obtiene los hallazgos de una inspección de análisis (generada por una foto).
+    /// Obtiene los hallazgos de una foto específica.
     /// </summary>
-    Task<List<FindingDetailDto>> GetInspectionFindingsAsync(Guid analysisInspectionId);
+    Task<List<FindingDetailDto>> GetPhotoFindingsAsync(Guid photoId);
 
     /// <summary>
     /// Obtiene el historial de inspecciones de la organización (para Admin/Supervisor).

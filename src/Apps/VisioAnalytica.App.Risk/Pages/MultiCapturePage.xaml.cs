@@ -556,8 +556,7 @@ public partial class MultiCapturePage : ContentPage
             // Convertir fotos optimizadas a DTOs
             var photoDtos = optimizedPhotos.Select(p => new PhotoDto(
                 Convert.ToBase64String(p.optimizedBytes),
-                p.capturedAt,
-                null
+                p.capturedAt
             )).ToList();
 
             System.Diagnostics.Debug.WriteLine($"📤 [OnAnalyzeClicked] Enviando {photoDtos.Count} fotos para crear inspección...");

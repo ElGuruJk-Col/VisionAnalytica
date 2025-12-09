@@ -91,25 +91,12 @@ namespace VisioAnalytica.Infrastructure.Data
                       .HasForeignKey(i => i.AffiliatedCompanyId)
                       .OnDelete(DeleteBehavior.Restrict); // Mantenemos las inspecciones aunque la empresa se desactive.
 
-                // Relación 1:N con Finding (los hallazgos).
-                entity.HasMany(i => i.Findings)
-                      .WithOne(f => f.Inspection)
-                      .HasForeignKey(f => f.InspectionId)
-                      // ¡CRÍTICO! Si se borra la Inspección, se borran sus detalles (Cascade).
-                      .OnDelete(DeleteBehavior.Cascade);
-
                 // Relación 1:N con Photo (las fotos capturadas).
                 // Usamos Restrict en lugar de Cascade para evitar múltiples rutas de cascada
                 entity.HasMany(i => i.Photos)
                       .WithOne(p => p.Inspection)
                       .HasForeignKey(p => p.InspectionId)
                       .OnDelete(DeleteBehavior.Restrict);
-
-                // Relación opcional: Inspección de análisis generada por una foto.
-                entity.HasMany<Photo>()
-                      .WithOne(p => p.AnalysisInspection)
-                      .HasForeignKey(p => p.AnalysisInspectionId)
-                      .OnDelete(DeleteBehavior.SetNull);
             });
 
             // 4. Reglas para la entidad Photo
@@ -122,11 +109,12 @@ namespace VisioAnalytica.Infrastructure.Data
                       .HasForeignKey(p => p.InspectionId)
                       .OnDelete(DeleteBehavior.Restrict);
                 
-                // Relación opcional con AnalysisInspection
-                entity.HasOne(p => p.AnalysisInspection)
-                      .WithMany()
-                      .HasForeignKey(p => p.AnalysisInspectionId)
-                      .OnDelete(DeleteBehavior.SetNull);
+                // Relación 1:N con Finding (los hallazgos de esta foto).
+                // Si se borra la foto, se borran sus hallazgos (Cascade).
+                entity.HasMany(p => p.Findings)
+                      .WithOne(f => f.Photo)
+                      .HasForeignKey(f => f.PhotoId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
 
             // 5. Reglas para la entidad AffiliatedCompany

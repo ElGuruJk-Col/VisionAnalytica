@@ -185,6 +185,10 @@ public class ImageOptimizationService : IImageOptimizationService
 
                 // Convertir a JPEG con calidad especificada
                 using var jpegData = resizedImage.AsJPEG(quality / 100f);
+                if (jpegData == null)
+                {
+                    return originalBytes;
+                }
                 var optimizedBytes = jpegData.ToArray();
 
                 return optimizedBytes;

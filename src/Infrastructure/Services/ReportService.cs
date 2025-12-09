@@ -35,23 +35,25 @@ namespace VisioAnalytica.Infrastructure.Services
                 return null;
             }
 
-            // 2. Mapear (transformar) la Entidad (Inspection) al DTO (InspectionDetailDto)
-            //    Este paso desacopla la capa de presentación de la capa de datos.
-            var findingDtos = inspection.Findings.Select(f => new FindingDetailDto
-            (
-                Id: f.Id,
-                Description: f.Description,
-                RiskLevel: f.RiskLevel,
-                CorrectiveAction: f.CorrectiveAction,
-                PreventiveAction: f.PreventiveAction
-            )).ToList();
+            // 2. Mapear (transformar) los Hallazgos de todas las fotos al DTO (InspectionDetailDto)
+            //    ✅ CORRECCIÓN: Los hallazgos están en las fotos, no en la inspección
+            var findingDtos = inspection.Photos?
+                .Where(p => p.IsAnalyzed && p.Findings != null)
+                .SelectMany(p => p.Findings.Select(f => new FindingDetailDto
+                (
+                    Id: f.Id,
+                    Description: f.Description,
+                    RiskLevel: f.RiskLevel,
+                    CorrectiveAction: f.CorrectiveAction,
+                    PreventiveAction: f.PreventiveAction
+                )))
+                .ToList() ?? [];
 
             // 3. Devolver el DTO del detalle
             return new InspectionDetailDto
             (
                 Id: inspection.Id,
                 AnalysisDate: inspection.AnalysisDate,
-                ImageUrl: inspection.ImageUrl,
                 UserName: inspection.User.UserName!, // Asumimos que el usuario fue incluido por el Repository (o lo inyectaremos a futuro).
                 Findings: findingDtos
             );
@@ -77,11 +79,10 @@ namespace VisioAnalytica.Infrastructure.Services
             (
                 Id: i.Id,
                 AnalysisDate: i.AnalysisDate != default ? i.AnalysisDate : i.StartedAt, // Usar StartedAt si AnalysisDate no está establecido
-                ImageUrl: i.ImageUrl ?? string.Empty,
                 UserName: i.User?.UserName ?? i.User?.Email ?? $"Usuario {i.UserId}", // Manejar User null
                 AffiliatedCompanyName: i.AffiliatedCompany?.Name ?? "N/A",
                 Status: i.Status ?? "Draft",
-                TotalFindings: i.Findings?.Count ?? 0
+                TotalFindings: i.Photos?.Sum(p => p.Findings?.Count ?? 0) ?? 0 // ✅ CORRECCIÓN: Sumar hallazgos de todas las fotos
             )).ToList();
 
             return summaryList;

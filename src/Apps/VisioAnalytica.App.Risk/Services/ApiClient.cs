@@ -601,11 +601,11 @@ public class ApiClient : IApiClient
     }
 
     /// <summary>
-    /// Obtiene los hallazgos de una inspección de análisis (generada por una foto).
+    /// Obtiene los hallazgos de una foto específica.
     /// </summary>
-    public async Task<List<FindingDetailDto>> GetInspectionFindingsAsync(Guid analysisInspectionId)
+    public async Task<List<FindingDetailDto>> GetPhotoFindingsAsync(Guid photoId)
     {
-        var endpoint = $"/api/v1/Inspection/{analysisInspectionId}/findings";
+        var endpoint = $"/api/v1/Inspection/photos/{photoId}/findings";
         var result = await GetAsync<List<FindingDetailDto>>(endpoint);
         return result ?? new List<FindingDetailDto>();
     }

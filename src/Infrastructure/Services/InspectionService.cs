@@ -30,12 +30,7 @@ public class InspectionService(
         var company = await _context.AffiliatedCompanies
             .FirstOrDefaultAsync(ac => ac.Id == request.AffiliatedCompanyId && 
                                       ac.OrganizationId == organizationId && 
-                                      ac.IsActive);
-
-        if (company == null)
-        {
-            throw new InvalidOperationException("La empresa cliente especificada no existe o no está activa.");
-        }
+                                      ac.IsActive) ?? throw new InvalidOperationException("La empresa cliente especificada no existe o no está activa.");
 
         // Crear la inspección
         var inspection = new Inspection
@@ -102,7 +97,6 @@ public class InspectionService(
                     InspectionId = inspection.Id,
                     ImageUrl = imageUrl,
                     CapturedAt = photoDto.CapturedAt,
-                    Description = photoDto.Description,
                     IsAnalyzed = false
                 };
 
@@ -159,7 +153,8 @@ public class InspectionService(
         }
 
         var inspections = await query
-            .Include(i => i.Findings) // Include Findings to count them
+            .Include(i => i.Photos)
+                .ThenInclude(p => p.Findings) // ✅ CORRECCIÓN: Include Findings de las fotos
             .OrderByDescending(i => i.StartedAt)
             .ToListAsync();
 
@@ -182,7 +177,7 @@ public class InspectionService(
             }
         }
 
-        return inspections.Select(i => MapToDto(i)).ToList();
+        return [.. inspections.Select(i => MapToDto(i))];
     }
     
     public async Task<PagedResult<InspectionDto>> GetMyInspectionsPagedAsync(
@@ -211,7 +206,8 @@ public class InspectionService(
         
         // Aplicar paginación
         var inspections = await query
-            .Include(i => i.Findings)
+            .Include(i => i.Photos)
+                .ThenInclude(p => p.Findings) // ✅ CORRECCIÓN: Include Findings de las fotos
             .OrderByDescending(i => i.StartedAt)
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
@@ -256,10 +252,11 @@ public class InspectionService(
         // Asegurar que las fotos estén cargadas - usar null-conditional para evitar errores
         var photosCount = i.Photos?.Count ?? 0;
         var analyzedCount = i.Photos?.Count(p => p.IsAnalyzed) ?? 0;
-        var findingsCount = i.Findings?.Count ?? 0;
+        // ✅ CORRECCIÓN: Los hallazgos están en las fotos, no en la inspección
+        var findingsCount = i.Photos?.Sum(p => p.Findings?.Count ?? 0) ?? 0;
         
         _logger.LogDebug(
-            "Inspección {InspectionId}: {PhotosCount} fotos totales, {AnalyzedCount} analizadas, {FindingsCount} hallazgos",
+            "Inspección {InspectionId}: {PhotosCount} fotos totales, {AnalyzedCount} analizadas, {FindingsCount} hallazgos totales",
             i.Id, photosCount, analyzedCount, findingsCount);
 
         return new InspectionDto(
@@ -276,9 +273,7 @@ public class InspectionService(
                 p.Id,
                 p.ImageUrl,
                 p.CapturedAt,
-                p.Description,
-                p.IsAnalyzed,
-                p.AnalysisInspectionId
+                p.IsAnalyzed
             )).ToList() ?? []
         );
     }
@@ -288,7 +283,7 @@ public class InspectionService(
         var inspection = await _context.Inspections
             .Include(i => i.AffiliatedCompany)
             .Include(i => i.Photos)
-            .Include(i => i.Findings) // ⚠️ CRÍTICO: Incluir Findings para que se carguen los hallazgos
+                .ThenInclude(p => p.Findings) // ✅ CORRECCIÓN: Incluir Findings de cada foto
             .FirstOrDefaultAsync(i => i.Id == inspectionId && 
                                      i.UserId == userId && 
                                      i.OrganizationId == organizationId);
@@ -302,12 +297,37 @@ public class InspectionService(
         // Asegurar que las fotos estén cargadas - usar null-conditional para evitar errores
         var photosCount = inspection.Photos?.Count ?? 0;
         var analyzedCount = inspection.Photos?.Count(p => p.IsAnalyzed) ?? 0;
+        // ✅ CORRECCIÓN: Los hallazgos están en las fotos, no en la inspección
+        var findingsCount = inspection.Photos?.Sum(p => p.Findings?.Count ?? 0) ?? 0;
         
         _logger.LogDebug(
-            "Inspección {InspectionId}: {PhotosCount} fotos totales, {AnalyzedCount} analizadas",
-            inspectionId, photosCount, analyzedCount);
+            "Inspección {InspectionId}: {PhotosCount} fotos totales, {AnalyzedCount} analizadas, {FindingsCount} hallazgos totales",
+            inspectionId, photosCount, analyzedCount, findingsCount);
 
-        var findingsCount = inspection.Findings?.Count ?? 0;
+        // Logging detallado de cada foto para diagnosticar
+        if (inspection.Photos != null)
+        {
+            foreach (var photo in inspection.Photos)
+            {
+                _logger.LogDebug(
+                    "Foto {PhotoId}: IsAnalyzed={IsAnalyzed}, Hallazgos={FindingsCount}",
+                    photo.Id, photo.IsAnalyzed, photo.Findings?.Count ?? 0);
+            }
+        }
+
+        var photosDto = inspection.Photos?.Select(p => 
+        {
+            _logger.LogDebug(
+                "Mapeando foto {PhotoId} a DTO: IsAnalyzed={IsAnalyzed}, Hallazgos={FindingsCount}",
+                p.Id, p.IsAnalyzed, p.Findings?.Count ?? 0);
+            
+            return new PhotoInfoDto(
+                p.Id,
+                p.ImageUrl,
+                p.CapturedAt,
+                p.IsAnalyzed
+            );
+        }).ToList() ?? [];
 
         return new InspectionDto(
             inspection.Id,
@@ -319,14 +339,7 @@ public class InspectionService(
             photosCount,
             analyzedCount,
             findingsCount,
-            inspection.Photos?.Select(p => new PhotoInfoDto(
-                p.Id,
-                p.ImageUrl,
-                p.CapturedAt,
-                p.Description,
-                p.IsAnalyzed,
-                p.AnalysisInspectionId
-            )).ToList() ?? []
+            photosDto
         );
     }
 
@@ -352,13 +365,7 @@ public class InspectionService(
             .Include(i => i.Photos)
             .FirstOrDefaultAsync(i => i.Id == inspectionId && 
                                      i.UserId == userId && 
-                                     i.OrganizationId == organizationId);
-
-        if (inspection == null)
-        {
-            throw new InvalidOperationException("Inspección no encontrada.");
-        }
-
+                                     i.OrganizationId == organizationId) ?? throw new InvalidOperationException("Inspección no encontrada.");
         var totalPhotos = inspection.Photos.Count;
         var analyzedPhotos = inspection.Photos.Count(p => p.IsAnalyzed);
         var pendingPhotos = totalPhotos - analyzedPhotos;
@@ -375,27 +382,25 @@ public class InspectionService(
         );
     }
 
-    public async Task<List<FindingDetailDto>> GetInspectionFindingsAsync(Guid analysisInspectionId, Guid userId, Guid organizationId)
+    /// <summary>
+    /// Obtiene los hallazgos de una foto específica.
+    /// </summary>
+    public async Task<List<FindingDetailDto>> GetPhotoFindingsAsync(Guid photoId, Guid userId, Guid organizationId)
     {
-        // Verificar que la inspección de análisis pertenezca al usuario y organización
-        var analysisInspection = await _context.Inspections
-            .Include(i => i.Findings)
-            .FirstOrDefaultAsync(i => i.Id == analysisInspectionId &&
-                                     i.UserId == userId &&
-                                     i.OrganizationId == organizationId);
-
-        if (analysisInspection == null)
-        {
-            throw new InvalidOperationException("Inspección de análisis no encontrada.");
-        }
-
-        return analysisInspection.Findings.Select(f => new FindingDetailDto(
+        // Verificar que la foto pertenezca a una inspección del usuario y organización
+        var photo = await _context.Photos
+            .Include(p => p.Findings)
+            .Include(p => p.Inspection)
+            .FirstOrDefaultAsync(p => p.Id == photoId &&
+                                     p.Inspection.UserId == userId &&
+                                     p.Inspection.OrganizationId == organizationId) ?? throw new InvalidOperationException("Foto no encontrada o no pertenece al usuario/organización.");
+        return [.. photo.Findings.Select(f => new FindingDetailDto(
             f.Id,
             f.Description,
             f.RiskLevel,
             f.CorrectiveAction,
             f.PreventiveAction ?? string.Empty
-        )).ToList();
+        ))];
     }
 }
 

@@ -22,6 +22,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    
+    <!-- Suprimir advertencias CA1416 para APIs de MAUI (falsos positivos - MAUI es multiplataforma) -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
 
     <OutputType>Exe</OutputType>
     <RootNamespace>VisioAnalytica.App.Risk</RootNamespace>
@@ -74,7 +77,7 @@
   <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-android' And '$(Configuration)' == 'Debug'">
     <!-- Fast Deployment: Solo 'dexa' lo que cambió -->
     <AndroidEnableDexingArtifactTransform>true</AndroidEnableDexingArtifactTransform>
-    <AndroidFastDeploymentType>Assemblies:Dexes</AndroidFastDeploymentType>
+    <!-- AndroidFastDeploymentType eliminado: está en desuso en .NET 9+ y se eliminará en versiones futuras -->
   </PropertyGroup>
 
   <!-- ─────────────────────────────
@@ -112,27 +115,29 @@
     <!-- R8 es el default, pero aseguramos que esté activo para Release -->
     <AndroidLinkTool>r8</AndroidLinkTool>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-android|AnyCPU'">
+    <AndroidCreatePackagePerAbi>False</AndroidCreatePackagePerAbi>
+    <PublishTrimmed>False</PublishTrimmed>
+    <JavaMaximumHeapSize>4G</JavaMaximumHeapSize>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-android|AnyCPU'">
+    <AndroidCreatePackagePerAbi>False</AndroidCreatePackagePerAbi>
+    <JavaMaximumHeapSize>4G</JavaMaximumHeapSize>
+  </PropertyGroup>
 
   <!-- ─────────────────────────────
        RECURSOS MAUI
        ───────────────────────────── -->
   <ItemGroup>
-    <MauiIcon Include="Resources\AppIcon\appicon.svg"
-              ForegroundFile="Resources\AppIcon\appiconfg.svg"
-              Color="#512BD4" />
+    <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
 
-    <MauiSplashScreen Include="Resources\Splash\splash.svg"
-                      Color="#512BD4"
-                      BaseSize="128,128" />
+    <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
 
     <MauiImage Include="Resources\Images\*" />
-    <MauiImage Update="Resources\Images\dotnet_bot.png"
-               Resize="True"
-               BaseSize="300,185" />
+    <MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
 
     <MauiFont Include="Resources\Fonts\*" />
-    <MauiAsset Include="Resources\Raw\**"
-               LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+    <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
   <!-- Android Network Security -->

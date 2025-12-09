@@ -481,8 +481,7 @@ public partial class CapturePage : ContentPage
             // Crear inspección con la foto usando el nuevo flujo
             var photoDto = new PhotoDto(
                 Convert.ToBase64String(_capturedImageBytes),
-                DateTime.UtcNow,
-                null
+                DateTime.UtcNow
             );
 
             var createRequest = new CreateInspectionDto(
