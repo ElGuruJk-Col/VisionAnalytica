@@ -74,4 +74,30 @@ TestResults/
 
 # Directorios de imagenes subidas al servidor
 src/Api/uploads/
-src/Api/uploads/
+src/Api/wwwroot/uploads/
+src/Storage/Images/
+src/Storage/Images/**/*
+
+# Mantener la estructura de carpetas pero ignorar el contenido
+!src/Storage/Images/.gitkeep
+
+# Ignorar imágenes subidas por usuarios (pero mantener recursos de la app)
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.webp
+*.tiff
+*.tif
+*.heic
+*.heif
+
+# Excepciones: mantener imágenes de recursos de la aplicación
+!**/Resources/**/*.jpg
+!**/Resources/**/*.jpeg
+!**/Resources/**/*.png
+!**/Resources/**/*.gif
+!**/Resources/**/*.svg
+!**/Resources/**/*.ico
+!**/wwwroot/favicon.png
