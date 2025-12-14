@@ -19,9 +19,16 @@ namespace VisioAnalytica.Infrastructure.Data
         // --- ¡NUEVOS DBSETS PARA PERSISTENCIA DE ANÁLISIS (Capítulo 3)! ---
         public DbSet<Inspection> Inspections { get; set; }
         public DbSet<Finding> Findings { get; set; }
+        public DbSet<Photo> Photos { get; set; }
 
         // --- EMPRESAS AFILIADAS (Sistema de Roles) ---
         public DbSet<AffiliatedCompany> AffiliatedCompanies { get; set; }
+
+        // --- REFRESH TOKENS (Sistema de Renovación de Tokens) ---
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
+
+        // --- CONFIGURACIÓN DE ORGANIZACIÓN (Optimización de Imágenes) ---
+        public DbSet<OrganizationSettings> OrganizationSettings { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -31,7 +38,7 @@ namespace VisioAnalytica.Infrastructure.Data
             // --- REGLAS DE NEGOCIO Y MODELADO ---
             // ===================================
 
-            // 1. Reglas para la entidad User (Relación con Organization)
+            // 1. Reglas para la entidad User (Relación con Organization y Supervisor)
             builder.Entity<User>(entity =>
             {
                 // Un Usuario pertenece a UNA Organización.
@@ -41,6 +48,13 @@ namespace VisioAnalytica.Infrastructure.Data
                       .HasForeignKey(u => u.OrganizationId)
                       // Si la Organización se borra, los Usuarios NO se borran (Restrict).
                       .OnDelete(DeleteBehavior.Restrict);
+
+                // Relación de Supervisor (self-referencing)
+                // Un Inspector puede tener un Supervisor (Admin/SuperAdmin)
+                entity.HasOne(u => u.Supervisor)
+                      .WithMany()
+                      .HasForeignKey(u => u.SupervisorId)
+                      .OnDelete(DeleteBehavior.NoAction); // NoAction para evitar ciclos de cascada en SQL Server
             });
 
             // 2. Reglas para la entidad Organization
@@ -54,6 +68,12 @@ namespace VisioAnalytica.Infrastructure.Data
                       .WithOne(i => i.Organization)
                       .HasForeignKey(i => i.OrganizationId)
                       .OnDelete(DeleteBehavior.Restrict); // Las Inspecciones NO se borran si la Org se borra.
+
+                // Relación 1:1 con OrganizationSettings
+                entity.HasOne(o => o.Settings)
+                      .WithOne(s => s.Organization)
+                      .HasForeignKey<OrganizationSettings>(s => s.OrganizationId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
 
             // 3. Reglas para la entidad Inspection
@@ -71,15 +91,33 @@ namespace VisioAnalytica.Infrastructure.Data
                       .HasForeignKey(i => i.AffiliatedCompanyId)
                       .OnDelete(DeleteBehavior.Restrict); // Mantenemos las inspecciones aunque la empresa se desactive.
 
-                // Relación 1:N con Finding (los hallazgos).
-                entity.HasMany(i => i.Findings)
-                      .WithOne(f => f.Inspection)
-                      .HasForeignKey(f => f.InspectionId)
-                      // ¡CRÍTICO! Si se borra la Inspección, se borran sus detalles (Cascade).
+                // Relación 1:N con Photo (las fotos capturadas).
+                // Usamos Restrict en lugar de Cascade para evitar múltiples rutas de cascada
+                entity.HasMany(i => i.Photos)
+                      .WithOne(p => p.Inspection)
+                      .HasForeignKey(p => p.InspectionId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // 4. Reglas para la entidad Photo
+            builder.Entity<Photo>(entity =>
+            {
+                // Relación N:1 con Inspection (la inspección a la que pertenece).
+                // Usamos Restrict en lugar de Cascade para evitar múltiples rutas de cascada
+                entity.HasOne(p => p.Inspection)
+                      .WithMany(i => i.Photos)
+                      .HasForeignKey(p => p.InspectionId)
+                      .OnDelete(DeleteBehavior.Restrict);
+                
+                // Relación 1:N con Finding (los hallazgos de esta foto).
+                // Si se borra la foto, se borran sus hallazgos (Cascade).
+                entity.HasMany(p => p.Findings)
+                      .WithOne(f => f.Photo)
+                      .HasForeignKey(f => f.PhotoId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
 
-            // 4. Reglas para la entidad AffiliatedCompany
+            // 5. Reglas para la entidad AffiliatedCompany
             builder.Entity<AffiliatedCompany>(entity =>
             {
                 // Relación N:1 con Organization.
@@ -92,7 +130,7 @@ namespace VisioAnalytica.Infrastructure.Data
                 entity.HasIndex(ac => new { ac.Name, ac.OrganizationId }).IsUnique();
             });
 
-            // 5. Relación Many-to-Many: Inspector (User) ↔ Empresas Afiliadas
+            // 6. Relación Many-to-Many: Inspector (User) ↔ Empresas Afiliadas
             builder.Entity<User>()
                 .HasMany(u => u.AssignedCompanies)
                 .WithMany(ac => ac.AssignedInspectors)
@@ -111,6 +149,40 @@ namespace VisioAnalytica.Infrastructure.Data
                         j.HasKey("UserId", "AffiliatedCompanyId");
                         j.ToTable("InspectorAffiliatedCompanies");
                     });
+
+            // 7. Reglas para la entidad RefreshToken
+            builder.Entity<RefreshToken>(entity =>
+            {
+                // Relación N:1 con User
+                entity.HasOne(rt => rt.User)
+                      .WithMany()
+                      .HasForeignKey(rt => rt.UserId)
+                      .OnDelete(DeleteBehavior.Cascade); // Si se borra el usuario, se borran sus refresh tokens
+
+                // Índice único en el token para búsquedas rápidas
+                entity.HasIndex(rt => rt.Token).IsUnique();
+
+                // Ignorar propiedades calculadas (no se mapean a la BD)
+                entity.Ignore(rt => rt.IsRevoked);
+                entity.Ignore(rt => rt.IsExpired);
+                entity.Ignore(rt => rt.IsActive);
+
+                // Índice compuesto para búsquedas por usuario y expiración
+                entity.HasIndex(rt => new { rt.UserId, rt.ExpiresAt });
+            });
+
+            // 8. Reglas para la entidad OrganizationSettings
+            builder.Entity<OrganizationSettings>(entity =>
+            {
+                // Relación 1:1 con Organization
+                entity.HasOne(os => os.Organization)
+                      .WithOne()
+                      .HasForeignKey<OrganizationSettings>(os => os.OrganizationId)
+                      .OnDelete(DeleteBehavior.Cascade); // Si se borra la organización, se borra su configuración
+
+                // Índice único en OrganizationId para garantizar una sola configuración por organización
+                entity.HasIndex(os => os.OrganizationId).IsUnique();
+            });
         }
     }
 }

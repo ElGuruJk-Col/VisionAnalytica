@@ -60,6 +60,18 @@ namespace VisioAnalytica.Core.Models
         public bool IsActive { get; set; } = true;
 
         /// <summary>
+        /// Número de intentos fallidos de inicio de sesión.
+        /// Se resetea a 0 cuando el login es exitoso.
+        /// </summary>
+        public int FailedLoginAttempts { get; set; } = 0;
+
+        /// <summary>
+        /// Fecha y hora hasta la cual la cuenta está bloqueada.
+        /// Null si la cuenta no está bloqueada.
+        /// </summary>
+        public DateTime? LockedUntil { get; set; }
+
+        /// <summary>
         /// Fecha y hora de creación del usuario.
         /// </summary>
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -69,6 +81,18 @@ namespace VisioAnalytica.Core.Models
         /// Null si fue creado por el sistema.
         /// </summary>
         public Guid? CreatedBy { get; set; }
+
+        /// <summary>
+        /// ID del supervisor/administrador actual del inspector.
+        /// Puede ser diferente de CreatedBy si el supervisor cambió.
+        /// Null si no tiene supervisor asignado.
+        /// </summary>
+        public Guid? SupervisorId { get; set; }
+
+        /// <summary>
+        /// Propiedad de navegación al supervisor actual.
+        /// </summary>
+        public virtual User? Supervisor { get; set; }
 
         // --- RELACIÓN CON EMPRESAS AFILIADAS (Solo para Inspectores) ---
 

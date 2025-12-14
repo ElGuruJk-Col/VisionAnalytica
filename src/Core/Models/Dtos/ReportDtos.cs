@@ -27,9 +27,10 @@ namespace VisioAnalytica.Core.Models.Dtos
     (
         Guid Id,
         DateTime AnalysisDate,
-        string ImageUrl,
         string UserName,
-        int TotalFindings // Un conteo rápido para la grilla
+        string AffiliatedCompanyName,
+        string Status,
+        int TotalFindings
     );
 
     /// <summary>
@@ -39,8 +40,7 @@ namespace VisioAnalytica.Core.Models.Dtos
     (
         Guid Id,
         DateTime AnalysisDate,
-        string ImageUrl,
         string UserName,
-        IReadOnlyList<FindingDetailDto> Findings // La lista completa de hallazgos
+        IReadOnlyList<FindingDetailDto> Findings
     );
 }

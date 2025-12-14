@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using VisioAnalytica.Core.Constants;
@@ -19,22 +20,33 @@ namespace VisioAnalytica.Api.Controllers
     public class UserManagementController : ControllerBase
     {
         private readonly IUserManagementService _userManagementService;
+        private readonly IAffiliatedCompanyService _affiliatedCompanyService;
+        private readonly IEmailService? _emailService;
+        private readonly UserManager<User> _userManager;
         private readonly ILogger<UserManagementController> _logger;
 
         public UserManagementController(
             IUserManagementService userManagementService,
-            ILogger<UserManagementController> logger)
+            IAffiliatedCompanyService affiliatedCompanyService,
+            UserManager<User> userManager,
+            ILogger<UserManagementController> logger,
+            IEmailService? emailService = null)
         {
             _userManagementService = userManagementService;
+            _affiliatedCompanyService = affiliatedCompanyService;
+            _userManager = userManager;
             _logger = logger;
+            _emailService = emailService;
         }
 
         /// <summary>
         /// Obtiene el ID del usuario autenticado desde el token JWT.
+        /// El token usa el claim "uid" (según TokenService).
         /// </summary>
         private Guid GetCurrentUserId()
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            // El TokenService genera el token con "uid" como claim personalizado
+            var userIdClaim = User.FindFirst("uid")?.Value;
             if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
             {
                 throw new UnauthorizedAccessException("Usuario no autenticado o token inválido.");
@@ -44,10 +56,12 @@ namespace VisioAnalytica.Api.Controllers
 
         /// <summary>
         /// Obtiene el ID de la organización del usuario autenticado.
+        /// El token usa el claim "org_id" (según TokenService).
         /// </summary>
         private Guid? GetCurrentUserOrganizationId()
         {
-            var orgIdClaim = User.FindFirst("organization_id")?.Value;
+            // El TokenService genera el token con "org_id" como claim personalizado
+            var orgIdClaim = User.FindFirst("org_id")?.Value;
             if (string.IsNullOrEmpty(orgIdClaim) || !Guid.TryParse(orgIdClaim, out var orgId))
             {
                 return null;
@@ -379,6 +393,84 @@ namespace VisioAnalytica.Api.Controllers
             {
                 _logger.LogError(ex, "Error al obtener usuarios por rol {Role}", roleName);
                 return StatusCode(500, "Error interno del servidor al obtener usuarios.");
+            }
+        }
+
+        /// <summary>
+        /// Notifica al supervisor de un inspector que no tiene empresas asignadas.
+        /// </summary>
+        [HttpPost("notify-inspector-without-companies")]
+        [Authorize(Roles = Roles.Inspector)]
+        public async Task<ActionResult> NotifyInspectorWithoutCompanies()
+        {
+            try
+            {
+                var currentUserId = GetCurrentUserId();
+                var inspector = await _userManager.FindByIdAsync(currentUserId.ToString());
+                
+                if (inspector == null)
+                {
+                    return NotFound("Inspector no encontrado.");
+                }
+                
+                // Verificar que realmente no tenga empresas asignadas
+                var companies = await _affiliatedCompanyService.GetByInspectorAsync(currentUserId, false);
+                if (companies != null && companies.Count > 0)
+                {
+                    return Ok(new { message = "El inspector tiene empresas asignadas." });
+                }
+                
+                // Obtener supervisor (SupervisorId o CreatedBy como fallback)
+                Guid? supervisorId = inspector.SupervisorId ?? inspector.CreatedBy;
+                
+                if (!supervisorId.HasValue)
+                {
+                    _logger.LogWarning("Inspector {InspectorId} no tiene supervisor asignado", currentUserId);
+                    return Ok(new { message = "No se encontró supervisor para notificar." });
+                }
+                
+                var supervisor = await _userManager.FindByIdAsync(supervisorId.Value.ToString());
+                if (supervisor == null || !supervisor.IsActive)
+                {
+                    _logger.LogWarning("Supervisor {SupervisorId} no encontrado o inactivo", supervisorId);
+                    return Ok(new { message = "El supervisor no está disponible." });
+                }
+                
+                // Enviar email al supervisor
+                if (_emailService != null)
+                {
+                    var emailSent = await _emailService.SendInspectorWithoutCompaniesEmailAsync(
+                        supervisor.Email!,
+                        supervisor.FirstName!,
+                        inspector.Email!,
+                        $"{inspector.FirstName} {inspector.LastName}");
+                    
+                    if (emailSent)
+                    {
+                        _logger.LogInformation(
+                            "Notificación enviada a supervisor {SupervisorId} sobre inspector {InspectorId} sin empresas",
+                            supervisorId, currentUserId);
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "No se pudo enviar email a supervisor {SupervisorId} sobre inspector {InspectorId} sin empresas",
+                            supervisorId, currentUserId);
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation(
+                        "[DEV ONLY] Inspector {InspectorId} sin empresas asignadas. Supervisor: {SupervisorId}",
+                        currentUserId, supervisorId);
+                }
+                
+                return Ok(new { message = "Notificación enviada al supervisor." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al notificar supervisor sobre inspector sin empresas");
+                return StatusCode(500, "Error interno del servidor.");
             }
         }
     }

@@ -31,11 +31,15 @@ namespace VisioAnalytica.Core.Models
         [MaxLength(500)]
         public string PreventiveAction { get; set; } = string.Empty; // AccionPreventiva
 
-        // --- Clave Foránea (Relación N:1 con Inspection) ---
+        // --- Clave Foránea (Relación N:1 con Photo) ---
 
+        /// <summary>
+        /// ID de la foto a la que pertenece este hallazgo.
+        /// Cada hallazgo está asociado a una foto específica analizada por la IA.
+        /// </summary>
         [Required]
-        public Guid InspectionId { get; set; }
-        [ForeignKey(nameof(InspectionId))]
-        public virtual Inspection Inspection { get; set; } = null!; // Referencia a la inspección padre
+        public Guid PhotoId { get; set; }
+        [ForeignKey(nameof(PhotoId))]
+        public virtual Photo Photo { get; set; } = null!; // Referencia a la foto
     }
 }

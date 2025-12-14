@@ -45,9 +45,10 @@ namespace VisioAnalytica.Infrastructure.Data
 
         public async Task<Inspection?> GetInspectionByIdAsync(Guid inspectionId)
         {
-            // Usamos .Include para cargar el detalle de Findings y User en la misma consulta.
+            // ✅ CORRECCIÓN: Los hallazgos están en las fotos, no en la inspección
             return await _context.Inspections
-                .Include(i => i.Findings)
+                .Include(i => i.Photos)
+                    .ThenInclude(p => p.Findings) // Incluir Findings de cada foto
                 .Include(i => i.User) // Incluir User para obtener UserName
                 .FirstOrDefaultAsync(i => i.Id == inspectionId);
         }
@@ -56,14 +57,24 @@ namespace VisioAnalytica.Infrastructure.Data
         {
             // El filtro Multi-Tenant es crítico: solo se devuelve lo que le pertenece a esta Org.
             var inspections = await _context.Inspections
-                .Include(i => i.Findings) // Incluimos los detalles
+                .Include(i => i.Photos)
+                    .ThenInclude(p => p.Findings) // ✅ CORRECCIÓN: Incluir Findings de cada foto
                 .Include(i => i.User) // Incluir User para obtener UserName
+                .Include(i => i.AffiliatedCompany) // Incluir Empresa Afiliada
                 .Where(i => i.OrganizationId == organizationId)
                 .OrderByDescending(i => i.AnalysisDate) // Las más recientes primero
                 .AsNoTracking() // Esto es una consulta de lectura, hacemos que sea más rápida.
                 .ToListAsync();
 
             return inspections;
+        }
+
+        public async Task<Guid?> GetFirstActiveAffiliatedCompanyIdAsync(Guid organizationId)
+        {
+            return await _context.AffiliatedCompanies
+                .Where(ac => ac.IsActive && ac.OrganizationId == organizationId)
+                .Select(ac => ac.Id)
+                .FirstOrDefaultAsync();
         }
     }
 }

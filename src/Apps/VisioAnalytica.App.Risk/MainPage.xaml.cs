@@ -5,14 +5,31 @@ namespace VisioAnalytica.App.Risk;
 public partial class MainPage : ContentPage
 {
 	private readonly IAuthService _authService;
+	private INavigationService? _navigationService;
 
-	public MainPage(IAuthService authService)
+	public MainPage(IAuthService authService, INavigationService? navigationService = null)
 	{
 		InitializeComponent();
 		_authService = authService;
+		_navigationService = navigationService;
+	}
+	
+	private INavigationService GetNavigationService()
+	{
+		if (_navigationService != null)
+			return _navigationService;
+
+		var serviceProvider = Handler?.MauiContext?.Services;
+		if (serviceProvider != null)
+		{
+			_navigationService = serviceProvider.GetRequiredService<INavigationService>();
+			return _navigationService;
+		}
+
+		throw new InvalidOperationException("INavigationService no está disponible.");
 	}
 
-	protected override void OnAppearing()
+	protected override async void OnAppearing()
 	{
 		base.OnAppearing();
 		
@@ -20,18 +37,18 @@ public partial class MainPage : ContentPage
 		if (!_authService.IsAuthenticated)
 		{
 			// Si no está autenticado, redirigir a login
-			Shell.Current.GoToAsync("//LoginPage");
+			await GetNavigationService().NavigateToLoginAsync();
 		}
 	}
 
 	private async void OnCaptureClicked(object? sender, EventArgs e)
 	{
-		await Shell.Current.GoToAsync("//CapturePage");
+		await GetNavigationService().NavigateToMultiCaptureAsync();
 	}
 
 	private async void OnHistoryClicked(object? sender, EventArgs e)
 	{
-		await Shell.Current.GoToAsync("//HistoryPage");
+		await GetNavigationService().NavigateToInspectionHistoryAsync();
 	}
 
 	private async void OnLogoutClicked(object? sender, EventArgs e)
@@ -40,7 +57,7 @@ public partial class MainPage : ContentPage
 		if (confirm)
 		{
 			await _authService.LogoutAsync();
-			await Shell.Current.GoToAsync("//LoginPage");
+			await GetNavigationService().NavigateToLoginAsync();
 		}
 	}
 }

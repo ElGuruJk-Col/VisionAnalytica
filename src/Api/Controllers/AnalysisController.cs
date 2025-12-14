@@ -71,10 +71,19 @@ namespace VisioAnalytica.Api.Controllers
 
             _logger.AnalysisRequestReceived(userId);
 
+            // Verificar si el usuario es SuperAdmin para omitir persistencia (modo de prueba)
+            var isSuperAdmin = User.IsInRole("SuperAdmin");
+            var skipPersistence = isSuperAdmin;
+
+            if (skipPersistence)
+            {
+                _logger.LogInformation("Usuario SuperAdmin detectado: Análisis en modo de prueba (sin persistencia).");
+            }
+
             try
             {
-                // Ahora la firma del servicio toma 3 argumentos.
-                var result = await _analysisService.PerformSstAnalysisAsync(request, userId, organizationId.Value);
+                // Pasar skipPersistence para SuperAdmin (modo de prueba sin persistencia)
+                var result = await _analysisService.PerformSstAnalysisAsync(request, userId, organizationId.Value, skipPersistence);
 
                 if (result == null)
                 {

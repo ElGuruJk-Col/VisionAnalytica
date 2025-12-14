@@ -16,16 +16,19 @@ namespace VisioAnalytica.Infrastructure.Services
         private readonly VisioAnalyticaDbContext _context;
         private readonly UserManager<User> _userManager;
         private readonly RoleManager<IdentityRole<Guid>> _roleManager;
+        private readonly IEmailService? _emailService;
         private readonly Random _random = new();
 
         public UserManagementService(
             VisioAnalyticaDbContext context,
             UserManager<User> userManager,
-            RoleManager<IdentityRole<Guid>> roleManager)
+            RoleManager<IdentityRole<Guid>> roleManager,
+            IEmailService? emailService = null)
         {
             _context = context;
             _userManager = userManager;
             _roleManager = roleManager;
+            _emailService = emailService;
         }
 
         public async Task<CreateUserResponseDto> CreateUserAsync(CreateUserRequestDto request, Guid createdByUserId)
@@ -102,6 +105,24 @@ namespace VisioAnalytica.Infrastructure.Services
                 // Si falla la asignación de rol, eliminar el usuario creado
                 await _userManager.DeleteAsync(user);
                 throw new InvalidOperationException($"Error al asignar el rol: {string.Join(", ", roleResult.Errors.Select(e => e.Description))}");
+            }
+
+            // Enviar email de bienvenida si se generó contraseña temporal
+            if (request.GenerateTemporaryPassword && _emailService != null)
+            {
+                var fullName = $"{user.FirstName} {user.LastName}";
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _emailService.SendWelcomeEmailAsync(user.Email!, fullName, password);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log el error pero no fallar la creación del usuario
+                        Console.WriteLine($"[WARNING] No se pudo enviar el email de bienvenida a {user.Email}: {ex.Message}");
+                    }
+                });
             }
 
             return new CreateUserResponseDto

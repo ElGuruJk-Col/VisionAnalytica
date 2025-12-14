@@ -2,10 +2,16 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Hangfire.Core" Version="1.8.22" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0" />
+    <PackageReference Include="QuestPDF" Version="2024.3.6" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
+    <!-- Forzar versión segura de Newtonsoft.Json para mitigar vulnerabilidad GHSA-5crp-9r3c-p9vr -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <!-- System.Drawing.Common es parte del framework .NET, no es un paquete externo con vulnerabilidades -->
+    <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -20,6 +26,14 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    
+    <!-- Optimizaciones específicas para Infrastructure (tiene muchos paquetes) -->
+    <!-- Excluir analizadores de paquetes en Debug para acelerar compilación -->
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+    
+    <!-- Suprimir warnings CA1416 para System.Drawing.Common (solo se usa en Windows) -->
+    <!-- Suprimir CA1873: Advertencias de logging (el logging estructurado es necesario) -->
+    <NoWarn>$(NoWarn);CA1416;CA1873</NoWarn>
   </PropertyGroup>
 
 </Project>

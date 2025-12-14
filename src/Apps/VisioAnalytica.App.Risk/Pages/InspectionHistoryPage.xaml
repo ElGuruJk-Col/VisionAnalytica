@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="VisioAnalytica.App.Risk.Pages.InspectionHistoryPage"
+             Title="Historial">
+    
+    <Grid RowDefinitions="Auto,Auto,Auto,*">
+        <!-- Header -->
+        <Label Grid.Row="0"
+               Text="Historial de Inspecciones"
+               FontSize="24"
+               FontAttributes="Bold"
+               TextColor="{StaticResource Gray900}"
+               Margin="16,16,16,8" />
+        
+        <!-- Filter Section -->
+        <Border Grid.Row="1"
+                Stroke="{StaticResource Gray300}"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 12"
+                Padding="0"
+                Margin="16,0,16,12"
+                BackgroundColor="White">
+            <Border.Shadow>
+                <Shadow Brush="{StaticResource Gray400}" Offset="0,2" Radius="5" Opacity="0.15"/>
+            </Border.Shadow>
+            <Grid RowDefinitions="Auto,*" Padding="16">
+                <!-- Header del filtro -->
+                <HorizontalStackLayout Grid.Row="0" Spacing="8" Margin="0,0,0,12">
+                    <Label Text="🏢"
+                           FontSize="20"
+                           VerticalOptions="Center" />
+                    <Label Text="Filtrar por Empresa"
+                           FontSize="16"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource Gray900}"
+                           VerticalOptions="Center" />
+                </HorizontalStackLayout>
+                
+                <!-- Picker mejorado con mejor visibilidad -->
+                <Border Grid.Row="1"
+                        x:Name="CompanyFilterBorder"
+                        Stroke="{StaticResource Primary}"
+                        StrokeThickness="2"
+                        StrokeShape="RoundRectangle 8"
+                        BackgroundColor="White"
+                        Padding="0">
+                    <Grid ColumnDefinitions="*,Auto" Padding="16,14">
+                        <Picker x:Name="CompanyFilterPicker"
+                                Grid.Column="0"
+                                SelectedIndexChanged="OnCompanyFilterChanged"
+                                BackgroundColor="Transparent"
+                                TextColor="{StaticResource Gray900}"
+                                FontSize="16"
+                                FontAttributes="Bold"
+                                MinimumHeightRequest="50"
+                                Title="Selecciona una empresa"
+                                TitleColor="{StaticResource Gray600}">
+                            <Picker.ItemsSource>
+                                <x:Array Type="{x:Type x:String}">
+                                    <x:String>Todas las empresas</x:String>
+                                </x:Array>
+                            </Picker.ItemsSource>
+                        </Picker>
+                        <Label Grid.Column="1"
+                               Text="▼"
+                               FontSize="18"
+                               FontAttributes="Bold"
+                               TextColor="{StaticResource Primary}"
+                               VerticalOptions="Center"
+                               HorizontalOptions="End"
+                               Margin="12,0,0,0" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+        
+        <!-- Loading Indicator (Initial Load) -->
+        <ActivityIndicator Grid.Row="2"
+                           x:Name="LoadingIndicator"
+                           IsRunning="False"
+                           IsVisible="False"
+                           Color="{StaticResource Primary}"
+                           HeightRequest="40"
+                           HorizontalOptions="Center"
+                           Margin="0,8" />
+        
+        <!-- Inspections List - CollectionView con scroll propio -->
+        <RefreshView Grid.Row="3"
+                     x:Name="RefreshContainer"
+                     RefreshColor="{StaticResource Primary}"
+                     IsRefreshing="False">
+            <CollectionView x:Name="InspectionsCollection"
+                            ItemsSource="{Binding Inspections}"
+                            RemainingItemsThreshold="5"
+                            RemainingItemsThresholdReached="OnRemainingItemsThresholdReached">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Border Stroke="{StaticResource Gray300}"
+                                StrokeThickness="1"
+                                StrokeShape="RoundRectangle 8"
+                                Padding="16"
+                                Margin="0,0,0,12"
+                                BackgroundColor="White">
+                            <VerticalStackLayout Spacing="8">
+                                <HorizontalStackLayout>
+                                    <Label Text="{Binding CompanyName}"
+                                           FontSize="16"
+                                           FontAttributes="Bold"
+                                           TextColor="{StaticResource Gray900}"
+                                           VerticalOptions="Center"
+                                           LineBreakMode="TailTruncation" />
+                                    <Border BackgroundColor="{Binding StatusBackgroundColor}"
+                                            Stroke="{Binding StatusColor}"
+                                            StrokeThickness="1"
+                                            StrokeShape="RoundRectangle 4"
+                                            Padding="8,4"
+                                            Margin="8,0,0,0">
+                                        <Label Text="{Binding Status}"
+                                               FontSize="12"
+                                               TextColor="{Binding StatusColor}" />
+                                    </Border>
+                                </HorizontalStackLayout>
+                                
+                                <Label Text="{Binding DateRange}"
+                                       FontSize="14"
+                                       TextColor="{StaticResource Gray600}" />
+                                
+                                <Label Text="{Binding PhotosInfo}"
+                                       FontSize="14"
+                                       TextColor="{StaticResource Gray600}" />
+                                
+                                <Button Text="Ver Detalles"
+                                        Clicked="OnViewDetailsClicked"
+                                        CommandParameter="{Binding Id}"
+                                        BackgroundColor="Transparent"
+                                        TextColor="{StaticResource Primary}"
+                                        HorizontalOptions="Start"
+                                        Padding="0"
+                                        HeightRequest="36" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+                <CollectionView.EmptyView>
+                    <VerticalStackLayout HorizontalOptions="Center"
+                                       VerticalOptions="Center"
+                                       Spacing="8"
+                                       Padding="20">
+                        <Label Text="📋"
+                               FontSize="48"
+                               HorizontalOptions="Center" />
+                        <Label Text="No hay inspecciones registradas"
+                               FontSize="14"
+                               TextColor="{StaticResource Gray600}"
+                               HorizontalOptions="Center" />
+                    </VerticalStackLayout>
+                </CollectionView.EmptyView>
+                <CollectionView.Footer>
+                    <ActivityIndicator x:Name="LoadingMoreIndicator"
+                                       IsRunning="False"
+                                       IsVisible="False"
+                                       Color="{StaticResource Primary}"
+                                       HeightRequest="40"
+                                       Margin="0,10,0,10" />
+                </CollectionView.Footer>
+            </CollectionView>
+        </RefreshView>
+    </Grid>
+    
+</ContentPage>
+

@@ -228,7 +228,7 @@ namespace VisioAnalytica.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<Guid>("InspectionId")
+                    b.Property<Guid>("PhotoId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("PreventiveAction")
@@ -243,7 +243,7 @@ namespace VisioAnalytica.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("InspectionId");
+                    b.HasIndex("PhotoId");
 
                     b.ToTable("Findings");
                 });
@@ -311,6 +311,136 @@ namespace VisioAnalytica.Infrastructure.Migrations
                     b.ToTable("Organizations");
                 });
 
+            modelBuilder.Entity("VisioAnalytica.Core.Models.OrganizationSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("EnableImageOptimization")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("GenerateThumbnails")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ImageQuality")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaxImageWidth")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("OrganizationId1")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ThumbnailQuality")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ThumbnailWidth")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId")
+                        .IsUnique();
+
+                    b.HasIndex("OrganizationId1")
+                        .IsUnique()
+                        .HasFilter("[OrganizationId1] IS NOT NULL");
+
+                    b.ToTable("OrganizationSettings");
+                });
+
+            modelBuilder.Entity("VisioAnalytica.Core.Models.Photo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CapturedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ImageUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("InspectionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsAnalyzed")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InspectionId");
+
+                    b.ToTable("Photos");
+                });
+
+            modelBuilder.Entity("VisioAnalytica.Core.Models.RefreshToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByIp")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReasonRevoked")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ReplacedByToken")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RevokedByIp")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "ExpiresAt");
+
+                    b.ToTable("RefreshTokens");
+                });
+
             modelBuilder.Entity("VisioAnalytica.Core.Models.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -337,6 +467,9 @@ namespace VisioAnalytica.Infrastructure.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("bit");
 
+                    b.Property<int>("FailedLoginAttempts")
+                        .HasColumnType("int");
+
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -347,6 +480,9 @@ namespace VisioAnalytica.Infrastructure.Migrations
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasColumnType("datetime2");
 
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("bit");
@@ -383,6 +519,9 @@ namespace VisioAnalytica.Infrastructure.Migrations
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<Guid?>("SupervisorId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");
 
@@ -401,6 +540,8 @@ namespace VisioAnalytica.Infrastructure.Migrations
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
 
                     b.HasIndex("OrganizationId");
+
+                    b.HasIndex("SupervisorId");
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -484,13 +625,13 @@ namespace VisioAnalytica.Infrastructure.Migrations
 
             modelBuilder.Entity("VisioAnalytica.Core.Models.Finding", b =>
                 {
-                    b.HasOne("VisioAnalytica.Core.Models.Inspection", "Inspection")
+                    b.HasOne("VisioAnalytica.Core.Models.Photo", "Photo")
                         .WithMany("Findings")
-                        .HasForeignKey("InspectionId")
+                        .HasForeignKey("PhotoId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Inspection");
+                    b.Navigation("Photo");
                 });
 
             modelBuilder.Entity("VisioAnalytica.Core.Models.Inspection", b =>
@@ -520,6 +661,43 @@ namespace VisioAnalytica.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("VisioAnalytica.Core.Models.OrganizationSettings", b =>
+                {
+                    b.HasOne("VisioAnalytica.Core.Models.Organization", "Organization")
+                        .WithOne()
+                        .HasForeignKey("VisioAnalytica.Core.Models.OrganizationSettings", "OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("VisioAnalytica.Core.Models.Organization", null)
+                        .WithOne("Settings")
+                        .HasForeignKey("VisioAnalytica.Core.Models.OrganizationSettings", "OrganizationId1");
+
+                    b.Navigation("Organization");
+                });
+
+            modelBuilder.Entity("VisioAnalytica.Core.Models.Photo", b =>
+                {
+                    b.HasOne("VisioAnalytica.Core.Models.Inspection", "Inspection")
+                        .WithMany("Photos")
+                        .HasForeignKey("InspectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Inspection");
+                });
+
+            modelBuilder.Entity("VisioAnalytica.Core.Models.RefreshToken", b =>
+                {
+                    b.HasOne("VisioAnalytica.Core.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("VisioAnalytica.Core.Models.User", b =>
                 {
                     b.HasOne("VisioAnalytica.Core.Models.Organization", "Organization")
@@ -528,7 +706,14 @@ namespace VisioAnalytica.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("VisioAnalytica.Core.Models.User", "Supervisor")
+                        .WithMany()
+                        .HasForeignKey("SupervisorId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.Navigation("Organization");
+
+                    b.Navigation("Supervisor");
                 });
 
             modelBuilder.Entity("VisioAnalytica.Core.Models.AffiliatedCompany", b =>
@@ -538,12 +723,19 @@ namespace VisioAnalytica.Infrastructure.Migrations
 
             modelBuilder.Entity("VisioAnalytica.Core.Models.Inspection", b =>
                 {
-                    b.Navigation("Findings");
+                    b.Navigation("Photos");
                 });
 
             modelBuilder.Entity("VisioAnalytica.Core.Models.Organization", b =>
                 {
+                    b.Navigation("Settings");
+
                     b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("VisioAnalytica.Core.Models.Photo", b =>
+                {
+                    b.Navigation("Findings");
                 });
 #pragma warning restore 612, 618
         }
