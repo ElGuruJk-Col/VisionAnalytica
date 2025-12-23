@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using VisioAnalytica.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using VisioAnalytica.Infrastructure.Data;
 namespace VisioAnalytica.Infrastructure.Migrations
 {
     [DbContext(typeof(VisioAnalyticaDbContext))]
-    partial class VisioAnalyticaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251207143502_AddOrganizationSettings")]
+    partial class AddOrganizationSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -228,7 +231,7 @@ namespace VisioAnalytica.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<Guid>("PhotoId")
+                    b.Property<Guid>("InspectionId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("PreventiveAction")
@@ -243,7 +246,7 @@ namespace VisioAnalytica.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PhotoId");
+                    b.HasIndex("InspectionId");
 
                     b.ToTable("Findings");
                 });
@@ -371,8 +374,15 @@ namespace VisioAnalytica.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("AnalysisInspectionId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("CapturedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("ImageUrl")
                         .IsRequired()
@@ -386,6 +396,8 @@ namespace VisioAnalytica.Infrastructure.Migrations
                         .HasColumnType("bit");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AnalysisInspectionId");
 
                     b.HasIndex("InspectionId");
 
@@ -625,13 +637,13 @@ namespace VisioAnalytica.Infrastructure.Migrations
 
             modelBuilder.Entity("VisioAnalytica.Core.Models.Finding", b =>
                 {
-                    b.HasOne("VisioAnalytica.Core.Models.Photo", "Photo")
+                    b.HasOne("VisioAnalytica.Core.Models.Inspection", "Inspection")
                         .WithMany("Findings")
-                        .HasForeignKey("PhotoId")
+                        .HasForeignKey("InspectionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Photo");
+                    b.Navigation("Inspection");
                 });
 
             modelBuilder.Entity("VisioAnalytica.Core.Models.Inspection", b =>
@@ -678,11 +690,18 @@ namespace VisioAnalytica.Infrastructure.Migrations
 
             modelBuilder.Entity("VisioAnalytica.Core.Models.Photo", b =>
                 {
+                    b.HasOne("VisioAnalytica.Core.Models.Inspection", "AnalysisInspection")
+                        .WithMany()
+                        .HasForeignKey("AnalysisInspectionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("VisioAnalytica.Core.Models.Inspection", "Inspection")
                         .WithMany("Photos")
                         .HasForeignKey("InspectionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("AnalysisInspection");
 
                     b.Navigation("Inspection");
                 });
@@ -723,6 +742,8 @@ namespace VisioAnalytica.Infrastructure.Migrations
 
             modelBuilder.Entity("VisioAnalytica.Core.Models.Inspection", b =>
                 {
+                    b.Navigation("Findings");
+
                     b.Navigation("Photos");
                 });
 
@@ -731,11 +752,6 @@ namespace VisioAnalytica.Infrastructure.Migrations
                     b.Navigation("Settings");
 
                     b.Navigation("Users");
-                });
-
-            modelBuilder.Entity("VisioAnalytica.Core.Models.Photo", b =>
-                {
-                    b.Navigation("Findings");
                 });
 #pragma warning restore 612, 618
         }

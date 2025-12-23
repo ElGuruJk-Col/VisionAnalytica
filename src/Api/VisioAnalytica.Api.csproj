@@ -9,6 +9,10 @@
     <!-- Optimizaciones específicas para API -->
     <!-- Swashbuckle puede ser lento, optimizar en Debug -->
     <GenerateDocumentationFile Condition="'$(Configuration)' == 'Debug'">false</GenerateDocumentationFile>
+    
+    <!-- Suprimir warnings CA1416 para System.Drawing.Common (solo se usa en Windows) -->
+    <!-- Suprimir CA1873: Advertencias de logging (el logging estructurado es necesario) -->
+    <NoWarn>$(NoWarn);CA1416;CA1873</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

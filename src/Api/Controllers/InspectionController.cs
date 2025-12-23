@@ -12,18 +12,12 @@ namespace VisioAnalytica.Api.Controllers;
 [ApiController]
 [Route("api/v1/[controller]")]
 [Authorize]
-public class InspectionController : ControllerBase
+public class InspectionController(
+    IInspectionService inspectionService,
+    ILogger<InspectionController> logger) : ControllerBase
 {
-    private readonly IInspectionService _inspectionService;
-    private readonly ILogger<InspectionController> _logger;
-
-    public InspectionController(
-        IInspectionService inspectionService,
-        ILogger<InspectionController> logger)
-    {
-        _inspectionService = inspectionService;
-        _logger = logger;
-    }
+    private readonly IInspectionService _inspectionService = inspectionService;
+    private readonly ILogger<InspectionController> _logger = logger;
 
     /// <summary>
     /// Obtiene el ID del usuario autenticado desde el token JWT.
@@ -300,13 +294,13 @@ public class InspectionController : ControllerBase
     }
 
     /// <summary>
-    /// Obtiene los hallazgos de una inspección de análisis (generada por una foto).
+    /// Obtiene los hallazgos de una foto específica.
     /// </summary>
-    [HttpGet("{id:guid}/findings")]
+    [HttpGet("photos/{photoId:guid}/findings")]
     [ProducesResponseType(typeof(List<FindingDetailDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<List<FindingDetailDto>>> GetInspectionFindings(Guid id)
+    public async Task<ActionResult<List<FindingDetailDto>>> GetPhotoFindings(Guid photoId)
     {
         var userId = GetCurrentUserId();
         var organizationId = GetOrganizationIdFromClaims();
@@ -318,8 +312,8 @@ public class InspectionController : ControllerBase
 
         try
         {
-            var findings = await _inspectionService.GetInspectionFindingsAsync(
-                id, userId.Value, organizationId.Value);
+            var findings = await _inspectionService.GetPhotoFindingsAsync(
+                photoId, userId.Value, organizationId.Value);
             
             return Ok(findings);
         }
@@ -329,7 +323,7 @@ public class InspectionController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error al obtener hallazgos para inspección {InspectionId}", id);
+            _logger.LogError(ex, "Error al obtener hallazgos para foto {PhotoId}", photoId);
             return StatusCode(500, new { message = "Error interno del servidor." });
         }
     }

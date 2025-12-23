@@ -35,23 +35,14 @@ public class Photo
     public DateTime CapturedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>
-    /// Descripción opcional de la foto.
-    /// </summary>
-    [MaxLength(500)]
-    public string? Description { get; set; }
-
-    /// <summary>
     /// Indica si esta foto ha sido analizada.
     /// </summary>
     public bool IsAnalyzed { get; set; } = false;
 
     /// <summary>
-    /// ID de la inspección de análisis asociada (si fue analizada).
-    /// Una foto analizada genera una nueva inspección con los hallazgos.
+    /// Hallazgos encontrados en esta foto por el análisis de IA.
+    /// Relación 1:N con Finding.
     /// </summary>
-    public Guid? AnalysisInspectionId { get; set; }
-    
-    [ForeignKey(nameof(AnalysisInspectionId))]
-    public virtual Inspection? AnalysisInspection { get; set; }
+    public virtual ICollection<Finding> Findings { get; set; } = new HashSet<Finding>();
 }
 

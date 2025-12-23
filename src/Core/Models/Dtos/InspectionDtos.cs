@@ -13,8 +13,7 @@ public record CreateInspectionDto(
 /// </summary>
 public record PhotoDto(
     string ImageBase64,
-    DateTime CapturedAt,
-    string? Description = null
+    DateTime CapturedAt
 );
 
 /// <summary>
@@ -48,9 +47,7 @@ public record PhotoInfoDto(
     Guid Id,
     string ImageUrl,
     DateTime CapturedAt,
-    string? Description,
-    bool IsAnalyzed,
-    Guid? AnalysisId
+    bool IsAnalyzed
 );
 
 /// <summary>

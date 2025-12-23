@@ -173,17 +173,25 @@ namespace VisioAnalytica.Api.Controllers
         /// <summary>
         /// Sirve una imagen de forma segura.
         /// Verifica permisos basados en roles y empresas afiliadas.
+        /// Nota: Los parámetros width y quality son aceptados pero ignorados (compatibilidad con cliente).
         /// </summary>
         /// <param name="organizationId">ID de la organización (parte de la ruta)</param>
         /// <param name="fileName">Nombre del archivo</param>
         /// <param name="affiliatedCompanyId">ID de la empresa afiliada (opcional, para validación adicional)</param>
+        /// <param name="width">Ancho máximo (ignorado, mantenido para compatibilidad con cliente)</param>
+        /// <param name="quality">Calidad (ignorado, mantenido para compatibilidad con cliente)</param>
         /// <returns>El archivo de imagen si el usuario tiene permisos, o 403/404 si no</returns>
         [HttpGet("images/{organizationId:guid}/{fileName}")]
         [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> GetImage(Guid organizationId, string fileName, [FromQuery] Guid? affiliatedCompanyId = null)
+        public async Task<IActionResult> GetImage(
+            Guid organizationId, 
+            string fileName, 
+            [FromQuery] Guid? affiliatedCompanyId = null,
+            [FromQuery] int? width = null,
+            [FromQuery] int? quality = null)
         {
             // 1. Verificar permisos basados en roles y empresas afiliadas
             var hasAccess = await HasAccessToImageAsync(organizationId, fileName, affiliatedCompanyId);
@@ -240,10 +248,90 @@ namespace VisioAnalytica.Api.Controllers
             // 5. Determinar el content type basado en la extensión
             var contentType = GetContentType(fileName);
 
-            // 6. Servir el archivo
+            // 6. Servir el archivo original
+            // Nota: Los parámetros width y quality son aceptados para compatibilidad con el cliente
+            // pero no se procesan (evita dependencias externas con vulnerabilidades)
+            if (width.HasValue || quality.HasValue)
+            {
+                _logger.LogDebug(
+                    "Parámetros de optimización recibidos pero ignorados (width: {Width}, quality: {Quality}). " +
+                    "Sirviendo imagen original. FileName: {FileName}", 
+                    width, quality, fileName);
+            }
+
             _logger.LogInformation(
                 "Imagen servida correctamente. UserId: {UserId}, OrgId: {OrgId}, FileName: {FileName}", 
                 userId, organizationId, fileName);
+
+            return PhysicalFile(sanitizedPath, contentType, fileName);
+        }
+
+        /// <summary>
+        /// Sirve un thumbnail de imagen de forma segura.
+        /// Si el thumbnail no existe, devuelve 404.
+        /// </summary>
+        /// <param name="organizationId">ID de la organización</param>
+        /// <param name="fileName">Nombre del archivo del thumbnail (formato: thumb_{originalFileName})</param>
+        /// <param name="affiliatedCompanyId">ID de la empresa afiliada (opcional, para validación adicional)</param>
+        /// <returns>El thumbnail si existe y el usuario tiene permisos, o 404 si no existe</returns>
+        [HttpGet("images/{organizationId:guid}/thumbnails/{fileName}")]
+        [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetThumbnail(
+            Guid organizationId, 
+            string fileName, 
+            [FromQuery] Guid? affiliatedCompanyId = null)
+        {
+            // Verificar permisos (misma lógica que GetImage)
+            var hasAccess = await HasAccessToImageAsync(organizationId, fileName, affiliatedCompanyId);
+            if (!hasAccess)
+            {
+                var currentUserId = GetCurrentUserId();
+                _logger.LogWarning(
+                    "Intento de acceso no autorizado a thumbnail. " +
+                    "UserId: {UserId}, OrgId: {OrgId}, FileName: {FileName}, AffiliatedCompanyId: {CompanyId}", 
+                    currentUserId, organizationId, fileName, affiliatedCompanyId);
+                return StatusCode(StatusCodes.Status403Forbidden, 
+                    "No tienes permiso para acceder a este thumbnail.");
+            }
+
+            // Construir ruta del thumbnail: uploads/{orgId}/thumbnails/{fileName}
+            var basePath = GetStorageBasePath();
+            var orgFolder = Path.Combine(basePath, organizationId.ToString());
+            var thumbnailsFolder = Path.Combine(orgFolder, "thumbnails");
+            var filePath = Path.Combine(thumbnailsFolder, fileName);
+
+            // Sanitizar para prevenir path traversal
+            var sanitizedPath = Path.GetFullPath(filePath);
+            var sanitizedBasePath = Path.GetFullPath(thumbnailsFolder);
+            
+            if (!sanitizedPath.StartsWith(sanitizedBasePath, StringComparison.OrdinalIgnoreCase))
+            {
+                var userIdForLog = GetCurrentUserId();
+                _logger.LogWarning(
+                    "Intento de path traversal attack en thumbnail. " +
+                    "UserId: {UserId}, OrgId: {OrgId}, FileName: {FileName}", 
+                    userIdForLog, organizationId, fileName);
+                return StatusCode(StatusCodes.Status400BadRequest, "Nombre de archivo inválido.");
+            }
+
+            // Verificar que el thumbnail exista
+            if (!System.IO.File.Exists(sanitizedPath))
+            {
+                _logger.LogDebug(
+                    "Thumbnail no encontrado. OrgId: {OrgId}, FileName: {FileName}, Path: {Path}", 
+                    organizationId, fileName, sanitizedPath);
+                return NotFound("El thumbnail solicitado no existe.");
+            }
+
+            var contentType = GetContentType(fileName);
+            var userIdForInfo = GetCurrentUserId();
+            
+            _logger.LogInformation(
+                "Thumbnail servido correctamente. UserId: {UserId}, OrgId: {OrgId}, FileName: {FileName}", 
+                userIdForInfo, organizationId, fileName);
 
             return PhysicalFile(sanitizedPath, contentType, fileName);
         }

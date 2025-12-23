@@ -42,7 +42,6 @@ public class AnalysisOrchestrator(
                 .Include(i => i.User)
                 .Include(i => i.AffiliatedCompany)
                 .Include(i => i.Photos)
-                .Include(i => i.Findings) // ⚠️ Incluir Findings para evitar problemas de tracking
                 .FirstOrDefaultAsync(i => i.Id == inspectionId);
 
             if (inspection == null)
@@ -52,8 +51,8 @@ public class AnalysisOrchestrator(
             }
 
             _logger.LogInformation(
-                "Inspección {InspectionId} cargada. Estado actual: {Status}, Hallazgos existentes: {FindingsCount}",
-                inspectionId, inspection.Status, inspection.Findings?.Count ?? 0);
+                "Inspección {InspectionId} cargada. Estado actual: {Status}, Fotos: {PhotosCount}",
+                inspectionId, inspection.Status, inspection.Photos?.Count ?? 0);
 
             // Verificar que la inspección está siendo rastreada (no debería ser null)
             var entry = _context.Entry(inspection);
@@ -76,7 +75,7 @@ public class AnalysisOrchestrator(
             {
                 try
                 {
-                    var photo = inspection.Photos.FirstOrDefault(p => p.Id == photoId);
+                    var photo = inspection.Photos?.FirstOrDefault(p => p.Id == photoId);
                     if (photo == null || photo.IsAnalyzed)
                     {
                         _logger.LogWarning("Foto {PhotoId} no encontrada o ya analizada", photoId);
@@ -112,116 +111,61 @@ public class AnalysisOrchestrator(
                     if (analysisResult != null)
                     {
                         // ═══════════════════════════════════════════════════════════════
-                        // CORRECCIÓN: Agregar hallazgos directamente a la inspección original
-                        // NO crear nuevas inspecciones
+                        // CORRECCIÓN: Agregar hallazgos directamente a la foto analizada
+                        // Cada hallazgo pertenece a una foto específica (PhotoId)
                         // ═══════════════════════════════════════════════════════════════
                         
-                        // Agregar hallazgos directamente a la inspección original
+                        // Agregar hallazgos directamente a la foto
                         if (analysisResult.Hallazgos != null && analysisResult.Hallazgos.Count > 0)
                         {
-                            // ⚠️ CRÍTICO: Asegurar que la inspección está siendo rastreada como Modified, no Added
-                            var inspectionEntry = _context.Entry(inspection);
-                            if (inspectionEntry.State == Microsoft.EntityFrameworkCore.EntityState.Detached)
-                            {
-                                _logger.LogError("ERROR CRÍTICO: La inspección {InspectionId} está en estado Detached. Re-attaching...", inspection.Id);
-                                _context.Attach(inspection);
-                                inspectionEntry.State = Microsoft.EntityFrameworkCore.EntityState.Modified; // ⚠️ Marcar como Modified, no Added
-                            }
-                            else if (inspectionEntry.State == Microsoft.EntityFrameworkCore.EntityState.Added)
-                            {
-                                _logger.LogError("ERROR CRÍTICO: La inspección {InspectionId} está en estado Added. Cambiando a Modified...", inspection.Id);
-                                inspectionEntry.State = Microsoft.EntityFrameworkCore.EntityState.Modified; // ⚠️ Cambiar a Modified
-                            }
-                            
                             _logger.LogInformation(
-                                "Agregando {Count} hallazgos a la inspección {InspectionId}. Estado: {State}, Hallazgos actuales antes: {CurrentCount}",
-                                analysisResult.Hallazgos.Count, inspection.Id, inspectionEntry.State, inspection.Findings?.Count ?? 0);
+                                "Agregando {Count} hallazgos a la foto {PhotoId}",
+                                analysisResult.Hallazgos.Count, photo.Id);
                             
-                            // ⚠️ CRÍTICO: Agregar hallazgos directamente al contexto en lugar de a través de la colección de navegación
-                            // Esto evita que Entity Framework marque la inspección como nueva
+                            // Agregar hallazgos directamente al contexto con PhotoId
                             foreach (var hallazgo in analysisResult.Hallazgos)
                             {
                                 var finding = new Finding
                                 {
                                     Id = Guid.NewGuid(),
-                                    InspectionId = inspection.Id, // ⚠️ Usar la inspección original
+                                    PhotoId = photo.Id, // ✅ CORRECCIÓN: Usar PhotoId en lugar de InspectionId
                                     Description = hallazgo.Descripcion,
                                     RiskLevel = hallazgo.NivelRiesgo,
                                     CorrectiveAction = hallazgo.AccionCorrectiva,
                                     PreventiveAction = hallazgo.AccionPreventiva
                                 };
                                 
-                                // ⚠️ Agregar directamente al contexto, NO a través de la colección de navegación
                                 _context.Findings.Add(finding);
                                 
                                 _logger.LogDebug(
-                                    "Hallazgo {FindingId} agregado directamente al contexto para inspección {InspectionId}: {Description}",
-                                    finding.Id, inspection.Id, finding.Description);
+                                    "Hallazgo {FindingId} agregado para foto {PhotoId}: {Description}",
+                                    finding.Id, photo.Id, finding.Description);
                             }
                             
                             _logger.LogInformation(
-                                "Agregados {Count} hallazgos directamente al contexto para inspección {InspectionId}",
-                                analysisResult.Hallazgos.Count, inspection.Id);
+                                "Agregados {Count} hallazgos para foto {PhotoId}",
+                                analysisResult.Hallazgos.Count, photo.Id);
                         }
 
-                        // Marcar la foto como analizada (sin crear nueva inspección)
+                        // Marcar la foto como analizada
                         photo.IsAnalyzed = true;
-                        photo.AnalysisInspectionId = null; // ⚠️ Ya no necesitamos referenciar otra inspección
-                        
-                        // ⚠️ Verificar estado antes de guardar
-                        var inspectionStateBeforeSave = _context.Entry(inspection).State;
-                        var findingsCountBeforeSave = inspection.Findings?.Count ?? 0;
-                        var inspectionIdBeforeSave = inspection.Id;
-                        _logger.LogInformation(
-                            "Estado de inspección {InspectionId} antes de SaveChanges: State={State}, Hallazgos={FindingsCount}",
-                            inspection.Id, inspectionStateBeforeSave, findingsCountBeforeSave);
-                        
-                        // ⚠️ Verificar que no hay inspecciones duplicadas antes de guardar
-                        var inspectionCountBeforeSave = await _context.Inspections.CountAsync(i => i.Id == inspection.Id);
-                        if (inspectionCountBeforeSave > 1)
-                        {
-                            _logger.LogError(
-                                "❌ ERROR CRÍTICO ANTES DE GUARDAR: Ya existen {Count} inspecciones con ID {InspectionId}",
-                                inspectionCountBeforeSave, inspection.Id);
-                        }
                         
                         // Guardar cambios en una sola transacción
                         var savedEntries = await _context.SaveChangesAsync();
                         
-                        // ⚠️ Verificar que el ID de la inspección no cambió (no se creó una nueva)
-                        if (inspection.Id != inspectionIdBeforeSave)
-                        {
-                            _logger.LogError(
-                                "❌ ERROR CRÍTICO: El ID de la inspección cambió de {OldId} a {NewId}. Se creó una nueva inspección!",
-                                inspectionIdBeforeSave, inspection.Id);
-                        }
-                        
                         _logger.LogInformation(
-                            "SaveChanges completado para inspección {InspectionId}. Entidades afectadas: {SavedEntries}, Hallazgos después: {FindingsCount}",
-                            inspection.Id, savedEntries, inspection.Findings?.Count ?? 0);
-                        
-                        // Verificar que no se crearon nuevas inspecciones después de guardar
-                        var inspectionCountAfterSave = await _context.Inspections.CountAsync(i => i.Id == inspection.Id);
-                        if (inspectionCountAfterSave > 1)
-                        {
-                            _logger.LogError(
-                                "❌ ERROR CRÍTICO DESPUÉS DE GUARDAR: Se detectaron {Count} inspecciones con el mismo ID {InspectionId}",
-                                inspectionCountAfterSave, inspection.Id);
-                        }
-                        else if (inspectionCountAfterSave == 1)
-                        {
-                            _logger.LogInformation(
-                                "✅ Verificación OK: Solo existe 1 inspección con ID {InspectionId}",
-                                inspection.Id);
-                        }
+                            "SaveChanges completado para foto {PhotoId}. Entidades afectadas: {SavedEntries}",
+                            photo.Id, savedEntries);
                         
                         // Verificar que el cambio se guardó
-                        var updatedPhoto = await _context.Photos.FindAsync(photoId);
+                        var updatedPhoto = await _context.Photos
+                            .Include(p => p.Findings)
+                            .FirstOrDefaultAsync(p => p.Id == photoId);
                         if (updatedPhoto != null)
                         {
                             _logger.LogInformation(
-                                "Foto {PhotoId} marcada como analizada. IsAnalyzed={IsAnalyzed}, AnalysisInspectionId={AnalysisId}",
-                                photoId, updatedPhoto.IsAnalyzed, updatedPhoto.AnalysisInspectionId);
+                                "Foto {PhotoId} marcada como analizada. IsAnalyzed={IsAnalyzed}, Hallazgos: {FindingsCount}",
+                                photoId, updatedPhoto.IsAnalyzed, updatedPhoto.Findings?.Count ?? 0);
                         }
                         else
                         {
@@ -246,8 +190,8 @@ public class AnalysisOrchestrator(
 
             // Recargar la inspección para verificar el estado actual de las fotos
             await _context.Entry(inspection).Collection(i => i.Photos).LoadAsync();
-            var totalPhotos = inspection.Photos.Count;
-            var analyzedPhotos = inspection.Photos.Count(p => p.IsAnalyzed);
+            var totalPhotos = inspection.Photos?.Count ?? 0;
+            var analyzedPhotos = inspection.Photos?.Count(p => p.IsAnalyzed) ?? 0;
             
             _logger.LogInformation(
                 "Estado de fotos en inspección {InspectionId}: {TotalPhotos} totales, {AnalyzedPhotos} analizadas",
@@ -299,12 +243,12 @@ public class AnalysisOrchestrator(
                     try
                     {
                         // Recargar inspección con TODOS los datos necesarios para el reporte
-                        // ⚠️ CORRECCIÓN: Los hallazgos ahora están directamente en la inspección original
+                        // ✅ CORRECCIÓN: Los hallazgos están en las fotos (Photo.Findings)
                         var fullInspection = await _context.Inspections
                             .Include(i => i.User)
                             .Include(i => i.AffiliatedCompany)
                             .Include(i => i.Photos)
-                            .Include(i => i.Findings) // ⚠️ Hallazgos directamente en la inspección
+                                .ThenInclude(p => p.Findings) // ✅ Hallazgos en cada foto
                             .FirstOrDefaultAsync(i => i.Id == inspectionId);
 
                         if (fullInspection != null)

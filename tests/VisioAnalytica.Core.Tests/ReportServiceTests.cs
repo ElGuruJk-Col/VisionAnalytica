@@ -38,16 +38,30 @@ namespace VisioAnalytica.Core.Tests
             {
                 Id = _inspectionId,
                 AnalysisDate = new DateTime(2025, 10, 26, 10, 0, 0, DateTimeKind.Utc),
-                ImageUrl = "http://blob.storage/image.jpg",
                 UserId = _testUserId,
                 OrganizationId = _testOrganizationId,
                 // Simulamos la relación con el usuario para el mapeo
                 User = new User { Id = _testUserId, UserName = "InspectorTest", FirstName = "Test" }
             };
 
-            // Añadir Hallazgos
-            _testInspection.Findings.Add(new Finding { Id = Guid.NewGuid(), Description = "Falla de EPP", RiskLevel = "ALTO", CorrectiveAction = "Corregir A", PreventiveAction = "Prevenir A" });
-            _testInspection.Findings.Add(new Finding { Id = Guid.NewGuid(), Description = "Piso mojado", RiskLevel = "MEDIO", CorrectiveAction = "Corregir B", PreventiveAction = "Prevenir B" });
+            // Crear una foto con hallazgos (los hallazgos ahora están en las fotos, no en la inspección)
+            var testPhoto = new Photo
+            {
+                Id = Guid.NewGuid(),
+                InspectionId = _inspectionId,
+                ImageUrl = "http://blob.storage/image.jpg",
+                CapturedAt = DateTime.UtcNow,
+                IsAnalyzed = true
+            };
+
+            // Añadir Hallazgos a la foto
+            var finding1 = new Finding { Id = Guid.NewGuid(), PhotoId = testPhoto.Id, Description = "Falla de EPP", RiskLevel = "ALTO", CorrectiveAction = "Corregir A", PreventiveAction = "Prevenir A" };
+            var finding2 = new Finding { Id = Guid.NewGuid(), PhotoId = testPhoto.Id, Description = "Piso mojado", RiskLevel = "MEDIO", CorrectiveAction = "Corregir B", PreventiveAction = "Prevenir B" };
+            
+            testPhoto.Findings.Add(finding1);
+            testPhoto.Findings.Add(finding2);
+            
+            _testInspection.Photos.Add(testPhoto);
 
             // --- 3. Configurar el Mock del Repositorio (Simulamos lo que haría la BBDD) ---
 
@@ -82,8 +96,7 @@ namespace VisioAnalytica.Core.Tests
 
             // 1. Verificar el mapeo de la cabecera (DTO de resumen)
             Assert.Equal(_inspectionId, summary.Id);
-            Assert.Equal("http://blob.storage/image.jpg", summary.ImageUrl);
-            Assert.Equal(2, summary.TotalFindings); // Contiene 2 hallazgos
+            Assert.Equal(2, summary.TotalFindings); // Contiene 2 hallazgos (sumados de todas las fotos)
 
             // 2. Verificar que se usó el repositorio
             _mockRepository.Verify(r => r.GetInspectionsByOrganizationAsync(_testOrganizationId), Times.Once);

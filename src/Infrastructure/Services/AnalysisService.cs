@@ -138,21 +138,14 @@ namespace VisioAnalytica.Infrastructure.Services
                     // Usamos los GUIDs validados y pasados por argumento.
                     UserId = parsedUserId,
                     OrganizationId = organizationId,
-                    ImageUrl = imageUrl, // URL real de la imagen guardada
                     AffiliatedCompanyId = affiliatedCompanyId.Value,
                 };
 
-                // 4.B: Mapear los Hallazgos (SstAnalysisResult) a las Entidades (Finding)
-                foreach (var hallazgo in result.Hallazgos)
-                {
-                    inspection.Findings.Add(new Finding
-                    {
-                        Description = hallazgo.Descripcion,
-                        RiskLevel = hallazgo.NivelRiesgo,
-                        CorrectiveAction = hallazgo.AccionCorrectiva,
-                        PreventiveAction = hallazgo.AccionPreventiva,
-                    });
-                }
+                // ⚠️ NOTA: Los hallazgos ahora se guardan en AnalysisOrchestrator asociados a fotos específicas.
+                // Este código solo se ejecuta si skipPersistence=false, pero en el flujo normal
+                // siempre se usa skipPersistence=true desde AnalysisOrchestrator.
+                // Si se necesita persistir aquí, se requeriría un PhotoId, que no está disponible en este contexto.
+                // Por ahora, no se persisten hallazgos aquí para evitar inconsistencias.
 
                 try
                 {

@@ -15,10 +15,6 @@ namespace VisioAnalytica.Core.Models
         [Required]
         public DateTime AnalysisDate { get; set; } = DateTime.UtcNow; // Cuándo se guardó
 
-        [Required]
-        [MaxLength(255)]
-        public string ImageUrl { get; set; } = string.Empty; // La URL o Path de la imagen (Blob Storage)
-
         // --- Claves Foráneas (Relaciones Multi-Tenant y Usuario) ---
 
         // El inspector que realizó el análisis (Relación 1:N con User)
@@ -56,11 +52,9 @@ namespace VisioAnalytica.Core.Models
         /// </summary>
         public DateTime? CompletedAt { get; set; }
 
-        // Propiedad de Navegación: Una Inspección tiene MUCHOS Hallazgos
-        public virtual ICollection<Finding> Findings { get; set; } = new HashSet<Finding>();
-
         /// <summary>
         /// Fotos capturadas en esta inspección.
+        /// Cada foto puede tener sus propios hallazgos (Findings).
         /// </summary>
         public virtual ICollection<Photo> Photos { get; set; } = new HashSet<Photo>();
     }

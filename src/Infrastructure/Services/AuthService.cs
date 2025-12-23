@@ -5,6 +5,7 @@ using VisioAnalytica.Core.Interfaces;
 using VisioAnalytica.Core.Models;
 using VisioAnalytica.Core.Models.Dtos;
 using VisioAnalytica.Infrastructure.Data;
+using VisioAnalytica.Infrastructure.Extensions;
 
 namespace VisioAnalytica.Infrastructure.Services
 {
@@ -128,6 +129,9 @@ namespace VisioAnalytica.Infrastructure.Services
                 };
                 _context.Organizations.Add(organization);
                 await _context.SaveChangesAsync();
+
+                // Crear configuración por defecto para la organización automáticamente
+                await _context.EnsureDefaultSettingsAsync(organization.Id);
 
                 var user = new User
                 {

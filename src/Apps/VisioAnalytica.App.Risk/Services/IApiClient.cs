@@ -74,9 +74,9 @@ public interface IApiClient
     Task<InspectionAnalysisStatusDto> GetAnalysisStatusAsync(Guid inspectionId);
 
     /// <summary>
-    /// Obtiene los hallazgos de una inspección de análisis (generada por una foto).
+    /// Obtiene los hallazgos de una foto específica.
     /// </summary>
-    Task<List<FindingDetailDto>> GetInspectionFindingsAsync(Guid analysisInspectionId);
+    Task<List<FindingDetailDto>> GetPhotoFindingsAsync(Guid photoId);
 
     /// <summary>
     /// Obtiene el historial de inspecciones de la organización (para Admin/Supervisor).
@@ -87,5 +87,10 @@ public interface IApiClient
     /// Renueva el access token usando un refresh token.
     /// </summary>
     Task<RefreshTokenResponse?> RefreshTokenAsync(string refreshToken);
+
+    /// <summary>
+    /// Obtiene la configuración de optimización de imágenes de la organización del usuario autenticado.
+    /// </summary>
+    Task<OrganizationSettingsDto?> GetOrganizationSettingsAsync();
 }
 

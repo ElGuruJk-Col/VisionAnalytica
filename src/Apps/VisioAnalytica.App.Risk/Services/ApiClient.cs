@@ -601,11 +601,11 @@ public class ApiClient : IApiClient
     }
 
     /// <summary>
-    /// Obtiene los hallazgos de una inspección de análisis (generada por una foto).
+    /// Obtiene los hallazgos de una foto específica.
     /// </summary>
-    public async Task<List<FindingDetailDto>> GetInspectionFindingsAsync(Guid analysisInspectionId)
+    public async Task<List<FindingDetailDto>> GetPhotoFindingsAsync(Guid photoId)
     {
-        var endpoint = $"/api/v1/Inspection/{analysisInspectionId}/findings";
+        var endpoint = $"/api/v1/Inspection/photos/{photoId}/findings";
         var result = await GetAsync<List<FindingDetailDto>>(endpoint);
         return result ?? new List<FindingDetailDto>();
     }
@@ -627,6 +627,15 @@ public class ApiClient : IApiClient
         var endpoint = "/api/auth/refresh";
         var request = new RefreshTokenRequest(refreshToken);
         return await PostAsync<RefreshTokenRequest, RefreshTokenResponse>(endpoint, request);
+    }
+
+    /// <summary>
+    /// Obtiene la configuración de optimización de imágenes de la organización del usuario autenticado.
+    /// </summary>
+    public async Task<OrganizationSettingsDto?> GetOrganizationSettingsAsync()
+    {
+        var endpoint = "/api/v1/OrganizationSettings";
+        return await GetAsync<OrganizationSettingsDto>(endpoint);
     }
 
     /// <summary>

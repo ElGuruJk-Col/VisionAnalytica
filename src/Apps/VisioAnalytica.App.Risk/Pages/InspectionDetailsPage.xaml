@@ -14,244 +14,253 @@
         </ResourceDictionary>
     </ContentPage.Resources>
     
-    <ScrollView BackgroundColor="White">
-        <VerticalStackLayout Padding="16" Spacing="16">
+    <Grid RowDefinitions="Auto,Auto,Auto,*" Padding="16" RowSpacing="16" BackgroundColor="White">
             
-            <!-- Header con botón de regreso -->
-            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" VerticalOptions="Center">
-                <Button Text="← Volver"
-                        Clicked="OnBackClicked"
-                        BackgroundColor="Transparent"
-                        TextColor="{StaticResource Primary}"
-                        FontSize="16"
-                        Padding="0"
-                        HeightRequest="40"
-                        Grid.Column="0" />
-                <Label Text="Detalles de Inspección"
-                       FontSize="24"
-                       FontAttributes="Bold"
-                       TextColor="{StaticResource Gray900}"
-                       VerticalOptions="Center"
-                       Grid.Column="1" />
-            </Grid>
-            
-            <!-- Inspection Info -->
-            <Border Stroke="{StaticResource Gray300}"
-                    StrokeThickness="1"
-                    StrokeShape="RoundRectangle 12"
-                    Padding="16"
-                    BackgroundColor="White">
-                <VerticalStackLayout Spacing="8">
-                    <Label x:Name="CompanyNameLabel"
-                           FontSize="18"
-                           FontAttributes="Bold"
-                           TextColor="{StaticResource Gray900}" />
-                    <Label x:Name="StatusLabel"
-                           FontSize="14"
-                           TextColor="{StaticResource Gray600}" />
-                    <Label x:Name="DateRangeLabel"
-                           FontSize="14"
-                           TextColor="{StaticResource Gray600}" />
-                </VerticalStackLayout>
-            </Border>
-            
-            <!-- Photos with Findings -->
-            <Label Text="Fotos Analizadas"
-                   FontSize="18"
-                   FontAttributes="Bold"
-                   TextColor="{StaticResource Gray900}"
-                   Margin="0,8,0,8" />
-            
-            <CollectionView x:Name="PhotosCollection"
-                            ItemsSource="{Binding PhotoFindings}">
-                <CollectionView.ItemTemplate>
-                    <DataTemplate>
-                        <Border Stroke="{StaticResource Gray300}"
-                                StrokeThickness="1"
-                                StrokeShape="RoundRectangle 12"
-                                Padding="16"
-                                Margin="0,0,0,16"
-                                BackgroundColor="White">
-                            <VerticalStackLayout Spacing="12">
-                                <!-- Photo Image -->
-                                <Border Stroke="{StaticResource Gray300}"
-                                        StrokeThickness="1"
-                                        StrokeShape="RoundRectangle 8"
-                                        Padding="4"
-                                        BackgroundColor="{StaticResource Gray100}">
-                                    <Grid HeightRequest="250" BackgroundColor="White">
-                                        <Image Source="{Binding ImageSource}"
-                                               Aspect="AspectFit" />
-                                        <VerticalStackLayout HorizontalOptions="Center"
-                                                           VerticalOptions="Center"
-                                                           Spacing="8"
-                                                           IsVisible="False">
-                                            <VerticalStackLayout.Triggers>
-                                                <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding ImageSource}" Value="{x:Null}">
-                                                    <Setter Property="IsVisible" Value="True" />
-                                                </DataTrigger>
-                                            </VerticalStackLayout.Triggers>
-                                            <Label Text="📷"
-                                                   FontSize="48"
-                                                   HorizontalOptions="Center" />
-                                            <Label Text="Cargando imagen..."
-                                                   FontSize="12"
-                                                   TextColor="{StaticResource Gray500}"
-                                                   HorizontalOptions="Center" />
-                                        </VerticalStackLayout>
-                                    </Grid>
-                                </Border>
-                                
-                                <!-- Photo Info -->
-                                <VerticalStackLayout Spacing="4">
-                                    <Label Text="{Binding CapturedAt, StringFormat='📅 Capturada: {0:dd/MM/yyyy HH:mm}'}"
-                                           FontSize="13"
-                                           FontAttributes="Bold"
-                                           TextColor="{StaticResource Gray700}" />
-                                    
-                                    <Label Text="{Binding Description}"
-                                           FontSize="12"
-                                           TextColor="{StaticResource Gray600}" />
-                                    
-                                    <Label Text="✅ Analizada"
-                                           FontSize="12"
-                                           TextColor="Green"
-                                           IsVisible="{Binding IsAnalyzed}" />
-                                    
-                                    <Label Text="⏳ Pendiente de análisis"
-                                           FontSize="12"
-                                           TextColor="Orange">
-                                        <Label.Triggers>
-                                            <DataTrigger TargetType="Label" Binding="{Binding IsAnalyzed}" Value="True">
-                                                <Setter Property="IsVisible" Value="False" />
-                                            </DataTrigger>
-                                        </Label.Triggers>
-                                    </Label>
-                                </VerticalStackLayout>
-                                
-                                <!-- Findings -->
-                                <Label Text="🔍 Hallazgos:"
-                                       FontSize="16"
-                                       FontAttributes="Bold"
-                                       TextColor="{StaticResource Gray900}"
-                                       Margin="0,8,0,4"
-                                       IsVisible="{Binding IsAnalyzed}" />
-                                
-                                <CollectionView ItemsSource="{Binding Findings}"
-                                                IsVisible="{Binding IsAnalyzed}">
-                                    <CollectionView.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Stroke="{Binding RiskLevel, Converter={StaticResource RiskLevelToColorConverter}}"
-                                                    StrokeThickness="2"
-                                                    StrokeShape="RoundRectangle 8"
-                                                    Padding="12"
-                                                    Margin="0,0,0,8"
-                                                    BackgroundColor="{Binding RiskLevel, Converter={StaticResource RiskLevelToBgColorConverter}}">
-                                                <VerticalStackLayout Spacing="8">
-                                                    <Label Text="{Binding Description}"
-                                                           FontSize="14"
-                                                           FontAttributes="Bold"
-                                                           TextColor="{StaticResource Gray900}" />
-                                                    
-                                                    <Border BackgroundColor="{Binding RiskLevel, Converter={StaticResource RiskLevelToBgColorConverter}}"
-                                                            Stroke="{Binding RiskLevel, Converter={StaticResource RiskLevelToColorConverter}}"
-                                                            StrokeThickness="1"
-                                                            StrokeShape="RoundRectangle 4"
-                                                            Padding="6,2"
-                                                            HorizontalOptions="Start">
-                                                        <Label Text="{Binding RiskLevel, StringFormat='Riesgo: {0}'}"
-                                                               FontSize="11"
-                                                               FontAttributes="Bold"
-                                                               TextColor="{Binding RiskLevel, Converter={StaticResource RiskLevelToTextColorConverter}}" />
-                                                    </Border>
-                                                    
-                                                    <VerticalStackLayout Spacing="4" Margin="0,4,0,0">
-                                                        <Label Text="🔧 Acción Correctiva:"
-                                                               FontSize="11"
-                                                               FontAttributes="Bold"
-                                                               TextColor="{StaticResource Gray700}" />
-                                                        <Label Text="{Binding CorrectiveAction}"
-                                                               FontSize="12"
-                                                               TextColor="{StaticResource Gray600}"
-                                                               Margin="8,0,0,0" />
-                                                    </VerticalStackLayout>
-                                                    
-                                                    <VerticalStackLayout Spacing="4" Margin="0,4,0,0">
-                                                        <Label Text="🛡️ Acción Preventiva:"
-                                                               FontSize="11"
-                                                               FontAttributes="Bold"
-                                                               TextColor="{StaticResource Gray700}" />
-                                                        <Label Text="{Binding PreventiveAction}"
-                                                               FontSize="12"
-                                                               TextColor="{StaticResource Gray600}"
-                                                               Margin="8,0,0,0" />
-                                                    </VerticalStackLayout>
-                                                </VerticalStackLayout>
-                                            </Border>
-                                        </DataTemplate>
-                                    </CollectionView.ItemTemplate>
-                                    <CollectionView.EmptyView>
-                                        <Border Stroke="{StaticResource Gray300}"
-                                                StrokeThickness="1"
-                                                StrokeShape="RoundRectangle 8"
-                                                Padding="16"
-                                                Margin="0,8,0,0"
-                                                BackgroundColor="{StaticResource Gray50}">
-                                            <Label Text="✅ No se encontraron hallazgos en esta foto"
-                                                   FontSize="13"
-                                                   TextColor="{StaticResource Gray600}"
-                                                   HorizontalOptions="Center" />
-                                        </Border>
-                                    </CollectionView.EmptyView>
-                                </CollectionView>
-                                
-                                <!-- Message for non-analyzed photos -->
-                                <Border Stroke="Orange"
-                                        StrokeThickness="1"
-                                        StrokeShape="RoundRectangle 8"
-                                        Padding="12"
-                                        Margin="0,8,0,0"
-                                        BackgroundColor="#FFF3E0">
-                                    <Border.Triggers>
-                                        <DataTrigger TargetType="Border" Binding="{Binding IsAnalyzed}" Value="True">
-                                            <Setter Property="IsVisible" Value="False" />
-                                        </DataTrigger>
-                                    </Border.Triggers>
-                                    <Label Text="⏳ Esta foto aún no ha sido analizada. Los hallazgos aparecerán aquí una vez que se complete el análisis."
-                                           FontSize="12"
-                                           TextColor="Orange"
-                                           HorizontalOptions="Center"
-                                           HorizontalTextAlignment="Center" />
-                                </Border>
-                            </VerticalStackLayout>
-                        </Border>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
-                <CollectionView.EmptyView>
-                    <VerticalStackLayout HorizontalOptions="Center"
-                                       VerticalOptions="Center"
-                                       Spacing="8"
-                                       Padding="20">
-                        <Label Text="📋"
-                               FontSize="48"
-                               HorizontalOptions="Center" />
-                        <Label Text="No hay fotos analizadas"
-                               FontSize="14"
-                               TextColor="{StaticResource Gray600}"
-                               HorizontalOptions="Center" />
-                    </VerticalStackLayout>
-                </CollectionView.EmptyView>
-            </CollectionView>
-            
-            <!-- Loading Indicator -->
-            <ActivityIndicator x:Name="LoadingIndicator"
+        <!-- Header con botón de regreso -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="12" VerticalOptions="Center">
+            <Button Text="← Volver"
+                    Clicked="OnBackClicked"
+                    BackgroundColor="Transparent"
+                    TextColor="{StaticResource Primary}"
+                    FontSize="16"
+                    Padding="0"
+                    HeightRequest="40"
+                    Grid.Column="0" />
+            <Label Text="Detalles de Inspección"
+                    FontSize="24"
+                    FontAttributes="Bold"
+                    TextColor="{StaticResource Gray900}"
+                    VerticalOptions="Center"
+                    Grid.Column="1" />
+        </Grid>
+        
+        <!-- Inspection Info -->
+        <Border Grid.Row="1"
+                Stroke="{StaticResource Gray300}"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 12"
+                Padding="16"
+                BackgroundColor="White">
+            <VerticalStackLayout Spacing="8">
+                <Label x:Name="CompanyNameLabel"
+                        FontSize="18"
+                        FontAttributes="Bold"
+                        TextColor="{StaticResource Gray900}" />
+                <Label x:Name="StatusLabel"
+                        FontSize="14"
+                        TextColor="{StaticResource Gray600}" />
+                <Label x:Name="DateRangeLabel"
+                        FontSize="14"
+                        TextColor="{StaticResource Gray600}" />
+            </VerticalStackLayout>
+        </Border>
+        
+        <!-- Photos List Header (+ Loading Indicator) -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+             <Label Text="Fotos Analizadas"
+                    FontSize="18"
+                    FontAttributes="Bold"
+                    TextColor="{StaticResource Gray900}"
+                    VerticalOptions="Center" />
+             
+             <ActivityIndicator x:Name="LoadingIndicator"
                                IsRunning="False"
                                IsVisible="False"
                                Color="{StaticResource Primary}"
-                               Margin="0,20,0,0" />
+                               HeightRequest="20"
+                               WidthRequest="20"
+                               Grid.Column="1" />
+        </Grid>
+
+        
+        <CollectionView x:Name="PhotosCollection"
+                        Grid.Row="3"
+                        ItemsSource="{Binding PhotoFindings}">
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Border Stroke="{StaticResource Gray300}"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 12"
+                            Padding="16"
+                            Margin="0,0,0,16"
+                            BackgroundColor="White">
+                        <VerticalStackLayout Spacing="12">
+                            <!-- Photo Image -->
+                            <Border Stroke="{StaticResource Gray300}"
+                                    StrokeThickness="1"
+                                    StrokeShape="RoundRectangle 8"
+                                    Padding="4"
+                                    BackgroundColor="{StaticResource Gray100}">
+                                <Grid HeightRequest="250" BackgroundColor="White">
+                                    <Image Source="{Binding ImageSource}"
+                                            Aspect="AspectFit">
+                                        <Image.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="OnImageTapped" 
+                                                                    CommandParameter="{Binding ImageUrl}" />
+                                        </Image.GestureRecognizers>
+                                    </Image>
+                                    <VerticalStackLayout HorizontalOptions="Center"
+                                                        VerticalOptions="Center"
+                                                        Spacing="8"
+                                                        IsVisible="False">
+                                        <VerticalStackLayout.Triggers>
+                                            <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding ImageSource}" Value="{x:Null}">
+                                                <Setter Property="IsVisible" Value="True" />
+                                            </DataTrigger>
+                                        </VerticalStackLayout.Triggers>
+                                        <Label Text="📷"
+                                                FontSize="48"
+                                                HorizontalOptions="Center" />
+                                        <Label Text="Cargando imagen..."
+                                                FontSize="12"
+                                                TextColor="{StaticResource Gray500}"
+                                                HorizontalOptions="Center" />
+                                    </VerticalStackLayout>
+                                </Grid>
+                            </Border>
+                            
+                            <!-- Photo Info -->
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="{Binding CapturedAt, StringFormat='📅 Capturada: {0:dd/MM/yyyy HH:mm}'}"
+                                        FontSize="13"
+                                        FontAttributes="Bold"
+                                        TextColor="{StaticResource Gray700}" />
+                                
+                                <Label Text="{Binding Description}"
+                                        FontSize="12"
+                                        TextColor="{StaticResource Gray600}" />
+                                
+                                <Label Text="✅ Analizada"
+                                        FontSize="12"
+                                        TextColor="Green"
+                                        IsVisible="{Binding IsAnalyzed}" />
+                                
+                                <Label Text="⏳ Pendiente de análisis"
+                                        FontSize="12"
+                                        TextColor="Orange">
+                                    <Label.Triggers>
+                                        <DataTrigger TargetType="Label" Binding="{Binding IsAnalyzed}" Value="True">
+                                            <Setter Property="IsVisible" Value="False" />
+                                        </DataTrigger>
+                                    </Label.Triggers>
+                                </Label>
+                            </VerticalStackLayout>
+                            
+                            <!-- Findings -->
+                            <Label Text="🔍 Hallazgos:"
+                                    FontSize="16"
+                                    FontAttributes="Bold"
+                                    TextColor="{StaticResource Gray900}"
+                                    Margin="0,8,0,4"
+                                    IsVisible="{Binding IsAnalyzed}" />
+                            
+                            <CollectionView ItemsSource="{Binding Findings}"
+                                            IsVisible="{Binding IsAnalyzed}">
+                                <CollectionView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Stroke="{Binding RiskLevel, Converter={StaticResource RiskLevelToColorConverter}}"
+                                                StrokeThickness="2"
+                                                StrokeShape="RoundRectangle 8"
+                                                Padding="12"
+                                                Margin="0,0,0,8"
+                                                BackgroundColor="{Binding RiskLevel, Converter={StaticResource RiskLevelToBgColorConverter}}">
+                                            <VerticalStackLayout Spacing="8">
+                                                <Label Text="{Binding Description}"
+                                                        FontSize="14"
+                                                        FontAttributes="Bold"
+                                                        TextColor="{StaticResource Gray900}" />
+                                                
+                                                <Border BackgroundColor="{Binding RiskLevel, Converter={StaticResource RiskLevelToBgColorConverter}}"
+                                                        Stroke="{Binding RiskLevel, Converter={StaticResource RiskLevelToColorConverter}}"
+                                                        StrokeThickness="1"
+                                                        StrokeShape="RoundRectangle 4"
+                                                        Padding="6,2"
+                                                        HorizontalOptions="Start">
+                                                    <Label Text="{Binding RiskLevel, StringFormat='Riesgo: {0}'}"
+                                                            FontSize="11"
+                                                            FontAttributes="Bold"
+                                                            TextColor="{Binding RiskLevel, Converter={StaticResource RiskLevelToTextColorConverter}}" />
+                                                </Border>
+                                                
+                                                <VerticalStackLayout Spacing="4" Margin="0,4,0,0">
+                                                    <Label Text="🔧 Acción Correctiva:"
+                                                            FontSize="11"
+                                                            FontAttributes="Bold"
+                                                            TextColor="{StaticResource Gray700}" />
+                                                    <Label Text="{Binding CorrectiveAction}"
+                                                            FontSize="12"
+                                                            TextColor="{StaticResource Gray600}"
+                                                            Margin="8,0,0,0" />
+                                                </VerticalStackLayout>
+                                                
+                                                <VerticalStackLayout Spacing="4" Margin="0,4,0,0">
+                                                    <Label Text="🛡️ Acción Preventiva:"
+                                                            FontSize="11"
+                                                            FontAttributes="Bold"
+                                                            TextColor="{StaticResource Gray700}" />
+                                                    <Label Text="{Binding PreventiveAction}"
+                                                            FontSize="12"
+                                                            TextColor="{StaticResource Gray600}"
+                                                            Margin="8,0,0,0" />
+                                                </VerticalStackLayout>
+                                            </VerticalStackLayout>
+                                        </Border>
+                                    </DataTemplate>
+                                </CollectionView.ItemTemplate>
+                                <CollectionView.EmptyView>
+                                    <Border Stroke="{StaticResource Gray300}"
+                                            StrokeThickness="1"
+                                            StrokeShape="RoundRectangle 8"
+                                            Padding="16"
+                                            Margin="0,8,0,0"
+                                            BackgroundColor="{StaticResource Gray50}">
+                                        <Label Text="✅ No se encontraron hallazgos en esta foto"
+                                                FontSize="13"
+                                                TextColor="{StaticResource Gray600}"
+                                                HorizontalOptions="Center" />
+                                    </Border>
+                                </CollectionView.EmptyView>
+                            </CollectionView>
+                            
+                            <!-- Message for non-analyzed photos -->
+                            <Border Stroke="Orange"
+                                    StrokeThickness="1"
+                                    StrokeShape="RoundRectangle 8"
+                                    Padding="12"
+                                    Margin="0,8,0,0"
+                                    BackgroundColor="#FFF3E0">
+                                <Border.Triggers>
+                                    <DataTrigger TargetType="Border" Binding="{Binding IsAnalyzed}" Value="True">
+                                        <Setter Property="IsVisible" Value="False" />
+                                    </DataTrigger>
+                                </Border.Triggers>
+                                <Label Text="⏳ Esta foto aún no ha sido analizada. Los hallazgos aparecerán aquí una vez que se complete el análisis."
+                                        FontSize="12"
+                                        TextColor="Orange"
+                                        HorizontalOptions="Center"
+                                        HorizontalTextAlignment="Center" />
+                            </Border>
+                        </VerticalStackLayout>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+            <CollectionView.EmptyView>
+                <VerticalStackLayout HorizontalOptions="Center"
+                                    VerticalOptions="Center"
+                                    Spacing="8"
+                                    Padding="20">
+                    <Label Text="📋"
+                            FontSize="48"
+                            HorizontalOptions="Center" />
+                    <Label Text="No hay fotos analizadas"
+                            FontSize="14"
+                            TextColor="{StaticResource Gray600}"
+                            HorizontalOptions="Center" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+        </CollectionView>
             
-        </VerticalStackLayout>
-    </ScrollView>
+    </Grid>
     
 </ContentPage>
 

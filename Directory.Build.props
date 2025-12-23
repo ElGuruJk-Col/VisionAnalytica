@@ -2,7 +2,8 @@
   <PropertyGroup>
     <!-- Solo aplicar TargetFramework genérico si NO es un proyecto MAUI -->
     <!-- Los proyectos MAUI usan TargetFrameworks (plural) con frameworks específicos -->
-    <TargetFramework Condition="'$(UseMaui)' != 'true'">net10.0</TargetFramework>
+    <!-- IMPORTANTE: Verificar que TargetFrameworks NO esté definido (proyectos MAUI lo definen) -->
+    <TargetFramework Condition="'$(TargetFrameworks)' == ''">net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     

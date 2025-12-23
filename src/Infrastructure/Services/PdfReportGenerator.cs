@@ -119,7 +119,7 @@ namespace VisioAnalytica.Infrastructure.Services
             {
                 column.Item().Text("Detalle de Hallazgos").FontSize(16).SemiBold();
                 
-                var analyzedPhotos = inspection.Photos.Where(p => p.IsAnalyzed && p.AnalysisInspectionId.HasValue).ToList();
+                var analyzedPhotos = inspection.Photos.Where(p => p.IsAnalyzed).ToList();
 
                 if (!analyzedPhotos.Any())
                 {
@@ -163,11 +163,11 @@ namespace VisioAnalytica.Infrastructure.Services
                 column.Item().Text($"Capturada: {photo.CapturedAt:dd/MM/yyyy HH:mm}").FontSize(10).FontColor(Colors.Grey.Medium);
 
                 // Hallazgos de esta foto
-                if (photo.AnalysisInspection != null && photo.AnalysisInspection.Findings.Any())
+                if (photo.Findings != null && photo.Findings.Any())
                 {
                     column.Item().PaddingTop(5).Text("Hallazgos Detectados:").SemiBold();
                     
-                    foreach (var finding in photo.AnalysisInspection.Findings)
+                    foreach (var finding in photo.Findings)
                     {
                         column.Item().Border(1).BorderColor(Colors.Grey.Lighten3).Padding(5).Column(findingColumn =>
                         {
